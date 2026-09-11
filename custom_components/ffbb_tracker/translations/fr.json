@@ -1,0 +1,148 @@
+{
+  "title": "FFBB Tracker",
+  "config": {
+    "step": {
+      "user": {
+        "title": "FFBB Tracker",
+        "description": "Entrez un nom de club, une ville, l'URL ou l'identifiant d'une équipe.",
+        "data": {
+          "search_query": "Club, ville, URL ou ID d'équipe"
+        }
+      },
+      "club": {
+        "title": "Sélectionner le club",
+        "description": "Choisissez votre club parmi les résultats.",
+        "data": {
+          "club_id": "Club"
+        }
+      },
+      "team": {
+        "title": "Sélectionner l'équipe",
+        "description": "Choisissez l'équipe à suivre.",
+        "data": {
+          "engagement_id": "Équipe"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossible de se connecter à l'API FFBB.",
+      "no_clubs_found": "Aucun club trouvé pour cette recherche.",
+      "no_teams_found": "Aucune équipe trouvée pour ce club.",
+      "invalid_engagement": "URL ou identifiant d'équipe invalide.",
+      "no_poule_found": "Aucune poule trouvée pour cette équipe.",
+      "query_too_short": "Merci de saisir au moins 2 caractères.",
+      "unknown": "Erreur inattendue."
+    },
+    "abort": {
+      "already_configured": "Cette équipe est déjà configurée.",
+      "club_not_found": "Club introuvable.",
+      "reconfigure_successful": "Reconfiguration réussie."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options FFBB Tracker",
+        "description": "Configurez la fréquence normale de mise à jour et le suivi en direct des rencontres pour cette équipe.",
+        "data": {
+          "scan_interval": "Intervalle normal d'actualisation (minutes)",
+          "live_polling": "Activer le rafraîchissement rapide autour des matchs",
+          "live_scan_interval": "Intervalle d'actualisation en direct (minutes)",
+          "live_window_after_hours": "Délai d'attente du score après match (heures)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "button": {
+      "refresh": {
+        "name": "Actualiser"
+      }
+    },
+    "calendar": {
+      "schedule": {
+        "name": "Calendrier des matchs"
+      }
+    },
+    "sensor": {
+      "next_match_date": {
+        "name": "Prochain match : Date"
+      },
+      "next_match_opponent": {
+        "name": "Prochain match : Équipe"
+      },
+      "next_match_venue_type": {
+        "name": "Prochain match : Terrain",
+        "state": {
+          "home": "Domicile",
+          "away": "Extérieur"
+        }
+      },
+      "next_match_location": {
+        "name": "Prochain match : Lieu"
+      },
+      "last_match_date": {
+        "name": "Dernier match : Date"
+      },
+      "last_match_opponent": {
+        "name": "Dernier match : Équipe"
+      },
+      "last_match_result": {
+        "name": "Dernier match : Résultat",
+        "state": {
+          "win": "Victoire",
+          "loss": "Défaite",
+          "draw": "Match nul"
+        }
+      },
+      "last_match_score": {
+        "name": "Dernier match : Score"
+      },
+      "ranking": {
+        "name": "Classement"
+      },
+      "ranking_evolution": {
+        "name": "Classement : Évolution"
+      },
+      "poule": {
+        "name": "Poule"
+      }
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Actualiser les données",
+      "description": "Force une mise à jour immédiate du coordinateur pour les équipes FFBB.",
+      "fields": {
+        "entry_id": {
+          "name": "Entrée de configuration",
+          "description": "Entrée de configuration spécifique à actualiser. Si omis, toutes les équipes sont mises à jour."
+        }
+      }
+    },
+    "get_next_matches": {
+      "name": "Obtenir les prochains matchs",
+      "description": "Renvoie les prochains matchs pour vos automatisations ou scripts.",
+      "fields": {
+        "entry_id": {
+          "name": "Entrée de configuration",
+          "description": "Entrée de configuration spécifique à cibler."
+        },
+        "limit": {
+          "name": "Limite",
+          "description": "Nombre de matchs à renvoyer."
+        }
+      }
+    },
+    "get_standings": {
+      "name": "Obtenir le classement de la poule",
+      "description": "Renvoie le tableau complet du classement de la poule.",
+      "fields": {
+        "entry_id": {
+          "name": "Entrée de configuration",
+          "description": "Entrée de configuration spécifique à cibler."
+        }
+      }
+    }
+  }
+}
