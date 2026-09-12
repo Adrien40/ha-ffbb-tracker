@@ -43,7 +43,7 @@
     "step": {
       "init": {
         "title": "FFBB Tracker Options",
-        "description": "Set how often data refreshes, and optionally speed things up around match time to get the score as soon as it's published.",
+        "description": "Set update frequency, and optionally speed things up around match time to get the score as soon as it's published.",
         "data": {
           "scan_interval": "Normal update interval (minutes)",
           "live_polling": "Faster polling on match days",
@@ -51,10 +51,10 @@
           "live_window_after_hours": "Result waiting window after match (hours)"
         },
         "data_description": {
-          "scan_interval": "How often to check for updates outside of match periods (15 to 1440 minutes).",
-          "live_polling": "Automatically switches to a shorter interval as a match approaches and until the result is published.",
-          "live_scan_interval": "Check frequency once fast polling kicks in (2 to 15 minutes).",
-          "live_window_after_hours": "How long fast polling keeps running after the match start time while waiting for the score (1 to 6 hours)."
+          "scan_interval": "Check frequency outside match periods (15–1440 min).",
+          "live_polling": "Switches automatically to a shorter interval around match time.",
+          "live_scan_interval": "Check frequency once fast polling is active (2–15 min).",
+          "live_window_after_hours": "How long fast polling continues after match start (1–6 hours)."
         }
       }
     }
