@@ -1,0 +1,173 @@
+rules:
+  # Bronze
+  action-setup:
+    status: done
+    comment: Services registered via async_setup_services(), called from async_setup_entry.
+  appropriate-polling:
+    status: done
+    comment: DataUpdateCoordinator with dynamic interval (_compute_update_interval), tightened around match time.
+  brands:
+    status: todo
+    comment: No brand assets submitted yet to home-assistant/brands.
+  common-modules:
+    status: done
+    comment: Shared api.py/coordinator.py/const.py modules used across all platforms.
+  config-flow-test-coverage:
+    status: done
+    comment: tests/test_config_flow.py covers club search, direct URL/ID, team selection, reconfigure, and errors.
+  config-flow:
+    status: done
+    comment: >
+      Full UI config flow (search by club/city, URL, or engagement ID) plus options flow.
+      Uses data_description on the options step. ConfigEntry.data holds identifiers,
+      ConfigEntry.options holds polling preferences.
+  dependency-transparency:
+    status: done
+    comment: No extra PyPI dependency; only aiohttp bundled with Home Assistant via async_get_clientsession.
+  docs-actions:
+    status: done
+    comment: README documents the three services (refresh, get_next_matches, get_standings) with an example automation.
+  docs-triggers:
+    status: exempt
+    comment: Integration does not provide triggers.
+  docs-conditions:
+    status: exempt
+    comment: Integration does not provide conditions.
+  docs-high-level-description:
+    status: done
+    comment: README explains what FFBB Tracker does and how it connects to competitions.ffbb.com.
+  docs-installation-instructions:
+    status: done
+    comment: README covers HACS and manual installation, step by step.
+  docs-removal-instructions:
+    status: todo
+    comment: README does not yet document how to remove the integration/cleanup.
+  entity-event-setup:
+    status: exempt
+    comment: All entities are CoordinatorEntity; no external event bus subscriptions to set up/tear down.
+  entity-unique-id:
+    status: done
+    comment: unique_id derived from engagement_id for every sensor, the button, and the calendar.
+  has-entity-name:
+    status: done
+    comment: _attr_has_entity_name = True set on all entities.
+  runtime-data:
+    status: done
+    comment: Coordinator stored on entry.runtime_data (typed FFBBConfigEntry), not hass.data.
+  test-before-configure:
+    status: done
+    comment: Config flow surfaces cannot_connect/no_clubs_found/no_teams_found/invalid_engagement errors from real API calls.
+  test-before-setup:
+    status: done
+    comment: async_setup_entry calls coordinator.async_config_entry_first_refresh(), raising ConfigEntryNotReady on failure.
+  unique-config-entry:
+    status: done
+    comment: unique_id set to engagement_id; already_configured abort prevents duplicates.
+
+  # Silver
+  action-exceptions:
+    status: todo
+    comment: Service handlers need an explicit review to confirm they raise HomeAssistantError (not bare exceptions) on failure.
+  config-entry-unloading:
+    status: done
+    comment: async_unload_entry implemented in __init__.py.
+  docs-configuration-parameters:
+    status: done
+    comment: Options step documents scan_interval/live_polling/live_scan_interval/live_window_after_hours via data_description.
+  docs-installation-parameters:
+    status: done
+    comment: README Configuration section documents the three search methods (club/city, URL, engagement ID).
+  entity-unavailable:
+    status: done
+    comment: CoordinatorEntity marks entities unavailable automatically when UpdateFailed is raised.
+  integration-owner:
+    status: done
+    comment: codeowners set to @Adrien40 in manifest.json.
+  log-when-unavailable:
+    status: todo
+    comment: Not verified that a single log line (not a burst) is emitted on first failure and on recovery.
+  parallel-updates:
+    status: todo
+    comment: PARALLEL_UPDATES not set in any platform module yet.
+  reauthentication-flow:
+    status: exempt
+    comment: No user credentials are involved; the integration uses a public, non-expiring read-only token.
+  test-coverage:
+    status: todo
+    comment: Test suite is broad (config_flow, coordinator, api, sensor, calendar, button, services, diagnostics) but percentage not measured against the 95% bar.
+
+  # Gold
+  devices:
+    status: done
+    comment: Each tracked team is registered as a device via DeviceInfo.
+  diagnostics:
+    status: done
+    comment: diagnostics.py redacts raw payloads/addresses, exposing only a compact summary.
+  discovery-update-info:
+    status: exempt
+    comment: Cloud service integration; no local network discovery involved.
+  discovery:
+    status: exempt
+    comment: Cloud polling integration; teams are looked up by search, not discovered.
+  docs-data-update:
+    status: done
+    comment: README explains the base/live polling behavior and the options that control it.
+  docs-examples:
+    status: done
+    comment: README includes a Telegram matchday-reminder automation example.
+  docs-known-limitations:
+    status: todo
+    comment: Season/engagement-ID rollover behavior (see repair-issues below) is not yet documented as a known limitation.
+  docs-supported-devices:
+    status: done
+    comment: README lists supported competition levels (departmental, regional, national).
+  docs-supported-functions:
+    status: done
+    comment: README's entity table documents every sensor, the button, and the calendar.
+  docs-troubleshooting:
+    status: done
+    comment: README FAQ section covers common issues (no team found, imprecise GPS link, evolution sensor showing 0).
+  docs-use-cases:
+    status: done
+    comment: README "Why this integration" section and automation example cover concrete use cases.
+  dynamic-devices:
+    status: exempt
+    comment: Exactly one device per config entry, created at setup; no devices are added afterwards.
+  entity-category:
+    status: todo
+    comment: No EntityCategory assigned (e.g. the refresh button could be EntityCategory.CONFIG or DIAGNOSTIC).
+  entity-device-class:
+    status: todo
+    comment: Timestamp sensors use SensorDeviceClass.TIMESTAMP; other text/status sensors not yet reviewed for enum/other device classes.
+  entity-disabled-by-default:
+    status: todo
+    comment: No entity is currently disabled by default; noisier/less-popular sensors haven't been identified.
+  entity-translations:
+    status: done
+    comment: Every entity has a translation_key resolved in strings.json and translations/fr.json.
+  exception-translations:
+    status: todo
+    comment: Raised exceptions are not yet wired to translation keys (translation_domain/translation_key on HomeAssistantError).
+  icon-translations:
+    status: todo
+    comment: Ranking evolution icon is computed in Python, not via icons.json translation entries.
+  reconfiguration-flow:
+    status: done
+    comment: async_step_reconfigure lets users switch team/pool without removing the entry.
+  repair-issues:
+    status: todo
+    comment: Planned - detect prolonged data staleness (likely season/engagement-ID rollover) and raise a repair issue pointing to reconfigure.
+  stale-devices:
+    status: exempt
+    comment: One device per config entry; the device is removed with the entry, nothing goes stale independently.
+
+  # Platinum
+  async-dependency:
+    status: done
+    comment: Uses aiohttp exclusively, no synchronous I/O.
+  inject-websession:
+    status: done
+    comment: async_get_clientsession(hass) is used; no integration-owned ClientSession is created.
+  strict-typing:
+    status: todo
+    comment: Type hints are used throughout, but the codebase has not been run against mypy --strict to confirm full compliance.
