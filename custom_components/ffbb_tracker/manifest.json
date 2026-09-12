@@ -7,5 +7,5 @@
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/Adrien40/ha-ffbb-tracker/issues",
-  "version": "0.6.1"
+  "version": "0.6.2"
 }
