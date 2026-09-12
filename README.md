@@ -7,7 +7,7 @@
 
 A **comprehensive Home Assistant integration** to track match results, schedules, and standings for Basketball teams competing in FFBB (French Basketball Federation) championships, with no user account or private API key required. 🛡️
 
-+ > ℹ️ **Good to know**: This integration queries the public Directus API used by the official `competitions.ffbb.com` web app, reusing the same public, read-only access token and browser User-Agent as the official site. No personal account or credentials are required. It fetches fixtures, results, and pool standings in a single optimized request.
+> ℹ️ **Good to know**: This integration queries the public Directus API used by the official `competitions.ffbb.com` web app, reusing the same public, read-only access token and browser User-Agent as the official site. No personal account or credentials are required. It fetches fixtures, results, and pool standings in a single optimized request.
 
 If you find this project useful, you can support its development 🙏
 
