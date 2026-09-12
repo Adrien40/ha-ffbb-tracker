@@ -51,10 +51,10 @@
           "live_window_after_hours": "Délai d'attente du score après match (heures)"
         },
         "data_description": {
-          "scan_interval": "Fréquence de vérification en dehors des périodes de match (15 à 1440 minutes).",
-          "live_polling": "Bascule automatiquement sur un intervalle plus court à l'approche d'un match et tant que le score n'est pas encore publié.",
-          "live_scan_interval": "Fréquence de vérification une fois le mode rapide activé (2 à 15 minutes).",
-          "live_window_after_hours": "Durée pendant laquelle le mode rapide reste actif après l'heure du match, en attendant la publication du score (1 à 6 heures)."
+          "scan_interval": "Fréquence de vérification hors période de match (15 à 1 440 min).",
+          "live_polling": "Bascule automatiquement sur un intervalle plus court autour des matchs.",
+          "live_scan_interval": "Fréquence de vérification en mode rapide (2 à 15 min).",
+          "live_window_after_hours": "Durée du mode rapide après le début du match (1 à 6 h)."
         }
       }
     }
