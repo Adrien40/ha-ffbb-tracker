@@ -35,6 +35,7 @@ class FFBBRefreshButtonEntity(
     _attr_has_entity_name = True
     _attr_translation_key = "refresh"
     _attr_icon = "mdi:refresh"
+    _attr_attribution = "Données fournies par competitions.ffbb.com"
 
     def __init__(self, coordinator: FFBBDataUpdateCoordinator) -> None:
         """Initialize the refresh button entity."""

@@ -38,6 +38,7 @@ class FFBBBaseBinarySensor(
     """Common device wiring shared by the FFBB Tracker binary sensors."""
 
     _attr_has_entity_name = True
+    _attr_attribution = "Données fournies par competitions.ffbb.com"
 
     def __init__(self, coordinator: FFBBDataUpdateCoordinator, key: str) -> None:
         """Initialize the binary sensor entity."""

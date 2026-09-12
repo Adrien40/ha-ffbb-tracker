@@ -40,8 +40,8 @@ rules:
     status: done
     comment: README covers HACS and manual installation, step by step.
   docs-removal-instructions:
-    status: todo
-    comment: README does not yet document how to remove the integration/cleanup.
+    status: done
+    comment: README "Uninstalling" section covers entity removal, HACS removal, and manual removal.
   entity-event-setup:
     status: exempt
     comment: All entities are CoordinatorEntity; no external event bus subscriptions to set up/tear down.
@@ -116,8 +116,8 @@ rules:
     status: done
     comment: README includes a Telegram matchday-reminder automation example.
   docs-known-limitations:
-    status: todo
-    comment: Season/engagement-ID rollover behavior (see repair-issues below) is not yet documented as a known limitation.
+    status: done
+    comment: README "Known Limitations" section covers season/engagement-ID rollover and the unofficial-API risk.
   docs-supported-devices:
     status: done
     comment: README lists supported competition levels (departmental, regional, national).

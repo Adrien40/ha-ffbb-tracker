@@ -69,6 +69,7 @@ class FFBBCalendarEntity(CoordinatorEntity[FFBBDataUpdateCoordinator], CalendarE
     _attr_has_entity_name = True
     _attr_translation_key = "schedule"
     _attr_icon = "mdi:calendar-month"
+    _attr_attribution = "Données fournies par competitions.ffbb.com"
 
     def __init__(self, coordinator: FFBBDataUpdateCoordinator) -> None:
         """Initialize the calendar entity."""
