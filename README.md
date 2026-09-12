@@ -5,9 +5,9 @@
 [![GitHub Release](https://img.shields.io/github/v/release/Adrien40/ha-ffbb-tracker)](https://github.com/Adrien40/ha-ffbb-tracker/releases)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-A **comprehensive Home Assistant integration** to track match results, schedules, and standings for BasketBall teams competing in FFBB (French BasketBall Federation) championships, with no user account or private API key required. 🛡️
+A **comprehensive Home Assistant integration** to track match results, schedules, and standings for Basketball teams competing in FFBB (French Basketball Federation) championships, with no user account or private API key required. 🛡️
 
-> ℹ️ **Good to know**: This integration communicates directly with the official public Directus REST endpoints of `competitions.ffbb.com` using standard browser headers matching the official web app. It fetches fixtures, results, and pool standings in a single optimized request.
++ > ℹ️ **Good to know**: This integration queries the public Directus API used by the official `competitions.ffbb.com` web app, reusing the same public, read-only access token and browser User-Agent as the official site. No personal account or credentials are required. It fetches fixtures, results, and pool standings in a single optimized request.
 
 If you find this project useful, you can support its development 🙏
 
@@ -49,7 +49,7 @@ If you find this project useful, you can support its development 🙏
 ---
 
 ### 💡 Why this integration?
-Designed for BasketBall players, parents, coaches, and supporters wishing to integrate team schedules and results into their smart home:
+Designed for Basketball players, parents, coaches, and supporters wishing to integrate team schedules and results into their smart home:
 
 * **🛡️ Zero account needed:** No personal credentials or private tokens required; the integration utilizes the public token provided for federal mobile web apps.
 * **🚗 Instant GPS navigation:** No more searching for gym addresses on game days; complete street addresses, postal codes, and direct GPS launch links are available in your dashboard and notification engines.
@@ -152,7 +152,7 @@ The `next_match_location` and `next_match_opponent` entities expose attributes d
 
 #### Example: Telegram matchday morning reminder
 ```yaml
-alias: "BasketBall - Game Day Reminder"
+alias: "Basketball - Game Day Reminder"
 trigger:
   - platform: time
     at: "09:00:00"
@@ -202,7 +202,7 @@ If you would like to see the integration translated into another language or con
 For bug reports or feature requests, please open an [Issue](https://github.com/Adrien40/ha-ffbb-tracker/issues) on this repository.
 
 ### ⚖️ License and Disclaimer
-This project is licensed under the **GPLv3**. It is an independent, open-source project and is not officially affiliated with the French BasketBall Federation (FFBB). Use of this software is at your own discretion.
+This project is licensed under the **GPLv3**. It is an independent, open-source project and is not officially affiliated with the French Basketball Federation (FFBB). Use of this software is at your own discretion.
 
 ---
 
@@ -210,4 +210,4 @@ This project is licensed under the **GPLv3**. It is an independent, open-source 
 
 <a href="https://www.buymeacoffee.com/adrien40"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" width="180"></a>
 
-<!-- Keywords: Home Assistant custom integration, FFBB, BasketBall, scores, standings, calendar, sports tracker, local automation -->
+<!-- Keywords: Home Assistant custom integration, FFBB, Basketball, scores, standings, calendar, sports tracker, local automation -->
