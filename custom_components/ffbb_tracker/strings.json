@@ -1,0 +1,162 @@
+{
+  "title": "FFBB Tracker",
+  "config": {
+    "step": {
+      "user": {
+        "title": "FFBB Tracker",
+        "description": "Enter a club name, city, team URL, or team ID.",
+        "data": {
+          "search_query": "Club, city, team URL, or team ID"
+        }
+      },
+      "club": {
+        "title": "Select Club",
+        "description": "Choose your club from the search results.",
+        "data": {
+          "club_id": "Club"
+        }
+      },
+      "team": {
+        "title": "Select Team",
+        "description": "Choose the team to track.",
+        "data": {
+          "engagement_id": "Team"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to the FFBB API.",
+      "no_clubs_found": "No clubs found matching your search.",
+      "no_teams_found": "No teams found for this club.",
+      "invalid_engagement": "Invalid team URL or team ID.",
+      "no_poule_found": "No pool found for this team.",
+      "query_too_short": "Please enter at least 2 characters.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "This team is already configured.",
+      "club_not_found": "Club not found.",
+      "reconfigure_successful": "Reconfiguration successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "FFBB Tracker Options",
+        "description": "Set update frequency, and optionally speed things up around match time to get the score as soon as it's published.",
+        "data": {
+          "scan_interval": "Normal update interval (minutes)",
+          "live_polling": "Faster polling on match days",
+          "live_scan_interval": "Live match update interval (minutes)",
+          "live_window_after_hours": "Result waiting window after match (hours)"
+        },
+        "data_description": {
+          "scan_interval": "Check frequency outside match periods (15–1440 min).",
+          "live_polling": "Switches automatically to a shorter interval around match time.",
+          "live_scan_interval": "Check frequency once fast polling is active (2–15 min).",
+          "live_window_after_hours": "How long fast polling continues after match start (1–6 hours)."
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "game_day": {
+        "name": "Game day"
+      },
+      "match_in_progress": {
+        "name": "Match in progress"
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Refresh"
+      }
+    },
+    "calendar": {
+      "schedule": {
+        "name": "Match schedule"
+      }
+    },
+    "sensor": {
+      "next_match_date": {
+        "name": "Next match: Date"
+      },
+      "next_match_opponent": {
+        "name": "Next match: Opponent"
+      },
+      "next_match_venue_type": {
+        "name": "Next match: Venue type",
+        "state": {
+          "home": "Home",
+          "away": "Away"
+        }
+      },
+      "next_match_location": {
+        "name": "Next match: Location"
+      },
+      "last_match_date": {
+        "name": "Last match: Date"
+      },
+      "last_match_opponent": {
+        "name": "Last match: Opponent"
+      },
+      "last_match_result": {
+        "name": "Last match: Result",
+        "state": {
+          "win": "Win",
+          "loss": "Loss",
+          "draw": "Draw"
+        }
+      },
+      "last_match_score": {
+        "name": "Last match: Score"
+      },
+      "ranking": {
+        "name": "Ranking"
+      },
+      "ranking_evolution": {
+        "name": "Ranking: Evolution"
+      },
+      "poule": {
+        "name": "Pool"
+      }
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Refresh data",
+      "description": "Force an immediate coordinator refresh for FFBB teams.",
+      "fields": {
+        "entry_id": {
+          "name": "Config entry",
+          "description": "Specific config entry to refresh. If omitted, all tracked teams are refreshed."
+        }
+      }
+    },
+    "get_next_matches": {
+      "name": "Get next matches",
+      "description": "Return upcoming matches for automations or scripts.",
+      "fields": {
+        "entry_id": {
+          "name": "Config entry",
+          "description": "Specific config entry to query."
+        },
+        "limit": {
+          "name": "Limit",
+          "description": "Number of matches to return."
+        }
+      }
+    },
+    "get_standings": {
+      "name": "Get pool standings",
+      "description": "Return full pool standings table.",
+      "fields": {
+        "entry_id": {
+          "name": "Config entry",
+          "description": "Specific config entry to query."
+        }
+      }
+    }
+  }
+}
