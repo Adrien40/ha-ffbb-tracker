@@ -43,12 +43,18 @@
     "step": {
       "init": {
         "title": "Options FFBB Tracker",
-        "description": "Configurez la fréquence normale de mise à jour et le suivi en direct des rencontres pour cette équipe.",
+        "description": "Réglez la fréquence habituelle des mises à jour, et activez éventuellement un rafraîchissement plus rapide autour des heures de match pour avoir le score au plus tôt.",
         "data": {
           "scan_interval": "Intervalle normal d'actualisation (minutes)",
-          "live_polling": "Activer le rafraîchissement rapide autour des matchs",
+          "live_polling": "Rafraîchissement accéléré les jours de match",
           "live_scan_interval": "Intervalle d'actualisation en direct (minutes)",
           "live_window_after_hours": "Délai d'attente du score après match (heures)"
+        },
+        "data_description": {
+          "scan_interval": "Fréquence de vérification habituelle, en dehors des périodes de match (15 à 1440 minutes).",
+          "live_polling": "Bascule automatiquement sur un intervalle plus court à l'approche d'un match et tant que le score n'est pas encore publié.",
+          "live_scan_interval": "Fréquence de vérification une fois le mode rapide activé (2 à 15 minutes).",
+          "live_window_after_hours": "Durée pendant laquelle le mode rapide reste actif après l'heure du match, en attendant la publication du score (1 à 6 heures)."
         }
       }
     }
