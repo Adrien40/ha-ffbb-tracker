@@ -43,7 +43,7 @@
     "step": {
       "init": {
         "title": "FFBB Tracker Options",
-        "description": "Set how often data refreshes normally, and optionally speed things up around match time to get the score as soon as it's published.",
+        "description": "Set how often data refreshes, and optionally speed things up around match time to get the score as soon as it's published.",
         "data": {
           "scan_interval": "Normal update interval (minutes)",
           "live_polling": "Faster polling on match days",
