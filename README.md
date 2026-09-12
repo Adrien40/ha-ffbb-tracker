@@ -7,7 +7,7 @@
 
 A **comprehensive Home Assistant integration** to track match results, schedules, and standings for BasketBall teams competing in FFBB (French BasketBall Federation) championships, with no user account or private API key required. 🛡️
 
-> ℹ️ **Good to know**: This integration queries the official public API used by `competitions.ffbb.com`. It fetches all fixtures, results, and pool standings in a single optimized request.
+> ℹ️ **Good to know**: This integration communicates directly with the official public Directus REST endpoints of `competitions.ffbb.com` using standard browser headers matching the official web app. It fetches fixtures, results, and pool standings in a single optimized request.
 
 If you find this project useful, you can support its development 🙏
 
@@ -78,6 +78,8 @@ Designed for BasketBall players, parents, coaches, and supporters wishing to int
   * `ffbb_tracker.refresh`: Triggers an immediate manual data update.
   * `ffbb_tracker.get_next_matches`: Returns upcoming fixtures as a structured dictionary for automations.
   * `ffbb_tracker.get_standings`: Returns full pool standings (points, wins, losses, played games).
+* 🔄 **One-Click Manual Refresh**: An explicit `button` entity to trigger an on-demand update anytime without waiting for the next polling cycle.
+* ⚙️ **Dynamic Polling & Live Match Options**: Adjust the regular polling interval (15 to 1440 minutes), enable fast polling on match days (2 to 15 minutes), and set the score-wait window.
 
 ---
 
@@ -103,10 +105,11 @@ While waiting for inclusion in the default HACS repository list, you can easily 
 
 ### 📊 Available Sensors and Entities
 
-Each configured team creates a dedicated device exposing 11 sensors and 1 calendar:
+Each configured team creates a dedicated device exposing 11 sensors, 1 button, and 1 calendar:
 
 | Entity | Class / Unit | Description |
 | :--- | :--- | :--- |
+| 🔄 **Refresh** | Button | Manually triggers an immediate coordinator update. |
 | 🗓️ **Schedule Calendar** | Calendar | Official calendar containing all scheduled and completed fixtures for the pool. |
 | 📊 **Standings** | Integer | Current position of the team in its pool. *(Includes full standings table in attributes)* |
 | 📈 **Rank Evolution** | Text | Position difference (`+1`, `-2`, `0`) with dynamic icon. |

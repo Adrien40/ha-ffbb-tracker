@@ -7,7 +7,7 @@
 
 Une **intégration complète pour Home Assistant** qui suit les résultats, calendriers et classements de vos équipes de BasketBall engagées en championnats FFBB (Fédération Française de BasketBall), sans compte ni clé privée requise. 🛡️
 
-> ℹ️ **À savoir** : Cette intégration interroge l'API publique officielle de la plateforme `competitions.ffbb.com`. Elle récupère l'ensemble des rencontres, résultats et classements de la poule en une seule requête optimisée.
+> ℹ️ **À savoir** : Cette intégration communique directement avec les points d'accès publics REST Directus de la plateforme `competitions.ffbb.com` en utilisant les en-têtes HTTP standards de l'application web officielle. Elle récupère l'ensemble des rencontres, résultats et classements de la poule en une seule requête optimisée.
 
 Si ce projet vous est utile, vous pouvez soutenir son développement 🙏
 
@@ -78,6 +78,8 @@ Conçue pour les joueuses, joueurs, parents et supporters de BasketBall amateur 
   * `ffbb_tracker.refresh` : Force l'actualisation manuelle immédiate des données.
   * `ffbb_tracker.get_next_matches` : Renvoie les prochains matchs sous forme de dictionnaire exploitable par vos automatisations.
   * `ffbb_tracker.get_standings` : Renvoie la grille complète du classement de la poule (points, victoires, défaites, matchs joués).
+* 🔄 **Bouton d'actualisation manuelle** : Une entité `button` pour forcer la mise à jour des données à tout moment sans attendre le cycle de scrutation.
+* ⚙️ **Cadence dynamique et suivi de direct** : Réglez l'intervalle de base (15 à 1 440 min), activez l'accélération les jours de match (2 à 15 min) et ajustez la fenêtre d'attente du score.
 
 ---
 
@@ -103,10 +105,11 @@ Ce dépôt n'étant pas encore dans la liste officielle par défaut, vous pouvez
 
 ### 📊 Capteurs et entités disponibles
 
-Chaque équipe configurée crée un appareil dédié regroupant 11 capteurs et un calendrier :
+Chaque équipe configurée crée un appareil dédié regroupant 11 capteurs, 1 bouton et 1 calendrier :
 
 | Entité | Classe / Unité | Description |
 | :--- | :--- | :--- |
+| 🔄 **Actualiser** | Bouton | Déclenche immédiatement une mise à jour manuelle des données de l'équipe. |
 | 🗓️ **Calendrier des matchs** | Calendrier | Calendrier officiel regroupant tous les matchs prévus et terminés de la poule. |
 | 📊 **Classement** | Entier | Position actuelle de l'équipe dans sa poule. *(Contient le tableau complet du classement en attribut)* |
 | 📈 **Classement : Évolution** | Texte | Évolution de la position (`+1`, `-2`, `0`) avec icône adaptative. |
