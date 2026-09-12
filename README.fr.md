@@ -8,6 +8,7 @@
 Une **intégration complète pour Home Assistant** qui suit les résultats, calendriers et classements de vos équipes de Basketball engagées en championnats FFBB (Fédération Française de Basketball), sans compte ni clé privée requise. 🛡️
 
 > ℹ️ **À savoir** : Cette intégration interroge l'API publique Directus utilisée par l'application web officielle `competitions.ffbb.com`, avec le même jeton d'accès public (lecture seule) et le même User-Agent de navigateur que le site officiel. Aucun compte ni identifiant personnel n'est nécessaire. Elle récupère l'ensemble des rencontres, résultats et classements de la poule en une seule requête optimisée.
+
 Si ce projet vous est utile, vous pouvez soutenir son développement 🙏
 
 <a href="https://www.buymeacoffee.com/adrien40"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" width="160"></a>
