@@ -36,6 +36,10 @@ from .const import (
 )
 from .coordinator import FFBBDataUpdateCoordinator
 
+# Entities are read-only views over coordinator.data (a single shared poll
+# per team); there is no per-entity network I/O to throttle here.
+PARALLEL_UPDATES = 0
+
 
 def _safe_int_value(val: Any) -> int | None:
     """Defensively parse integer values from raw payloads or restored state."""

@@ -226,6 +226,29 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
                 )
             return cache.data
 
+    def _is_match_live(self, data: FFBBTeamData) -> bool:
+        """Return True while the next match is starting soon or awaiting its result.
+
+        Factored out of _compute_update_interval so the same "is this match
+        live right now" condition can also back a binary_sensor, instead of
+        living only inside the polling-interval decision.
+        """
+        candidate = data.next_match
+        if not candidate or not candidate.match_date:
+            return False
+
+        now = dt_util.utcnow()
+        time_until = candidate.match_date - now
+        time_since = now - candidate.match_date
+
+        starting_soon = (
+            timedelta(0) <= time_until <= timedelta(minutes=LIVE_WINDOW_BEFORE_MINUTES)
+        )
+        awaiting_result = not candidate.is_played and (
+            timedelta(0) <= time_since <= timedelta(hours=self._live_window_after_hours)
+        )
+        return starting_soon or awaiting_result
+
     def _compute_update_interval(self, data: FFBBTeamData) -> timedelta:
         """Shorten the polling interval automatically around match time.
 
@@ -237,27 +260,39 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
         if not self._live_polling_enabled:
             return timedelta(minutes=self._base_interval_minutes)
 
-        now = dt_util.utcnow()
-        candidate = data.next_match
-
-        if candidate and candidate.match_date:
-            time_until = candidate.match_date - now
-            time_since = now - candidate.match_date
-            starting_soon = (
-                timedelta(0)
-                <= time_until
-                <= timedelta(minutes=LIVE_WINDOW_BEFORE_MINUTES)
-            )
-            awaiting_result = not candidate.is_played and (
-                timedelta(0)
-                <= time_since
-                <= timedelta(hours=self._live_window_after_hours)
-            )
-
-            if starting_soon or awaiting_result:
-                return timedelta(minutes=self._live_scan_interval)
+        if self._is_match_live(data):
+            return timedelta(minutes=self._live_scan_interval)
 
         return timedelta(minutes=self._base_interval_minutes)
+
+    @property
+    def is_match_live(self) -> bool:
+        """Whether the tracked team's next match is starting soon or awaiting its result.
+
+        Exposed for the "match in progress" binary sensor. Independent of
+        whether live_polling is enabled in options, since it's a factual
+        statement about the match, not a polling-speed decision.
+        """
+        if not self.data:
+            return False
+        return self._is_match_live(self.data)
+
+    @property
+    def is_game_day(self) -> bool:
+        """Whether the tracked team's next match is scheduled today (local time).
+
+        Exposed for the "game day" binary sensor. Deliberately date-only
+        (no time window) so it flips on at local midnight, unlike
+        is_match_live which is scoped to the pre/post kickoff window.
+        """
+        if (
+            not self.data
+            or not self.data.next_match
+            or not self.data.next_match.match_date
+        ):
+            return False
+        match_local = dt_util.as_local(self.data.next_match.match_date)
+        return match_local.date() == dt_util.now().date()
 
     def _process_poule_data(self, data: dict[str, Any]) -> FFBBTeamData:
         """Parse matches and standings for the tracked team."""

@@ -15,6 +15,10 @@ from . import FFBBConfigEntry
 from .const import DOMAIN
 from .coordinator import FFBBDataUpdateCoordinator, MatchDetails
 
+# The calendar entity only reads coordinator.data; it performs no direct
+# network I/O of its own, so there is nothing to throttle here.
+PARALLEL_UPDATES = 0
+
 # Calendar event descriptions are free text, not translated through HA's
 # entity translation system, but we still want them to match the language
 # the user picked for their Home Assistant instance rather than being

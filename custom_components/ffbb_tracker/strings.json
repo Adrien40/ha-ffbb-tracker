@@ -60,6 +60,14 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "game_day": {
+        "name": "Game day"
+      },
+      "match_in_progress": {
+        "name": "Match in progress"
+      }
+    },
     "button": {
       "refresh": {
         "name": "Refresh"

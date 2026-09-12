@@ -87,8 +87,8 @@ rules:
     status: todo
     comment: Not verified that a single log line (not a burst) is emitted on first failure and on recovery.
   parallel-updates:
-    status: todo
-    comment: PARALLEL_UPDATES not set in any platform module yet.
+    status: done
+    comment: PARALLEL_UPDATES = 0 set in sensor.py, button.py, calendar.py, and binary_sensor.py (coordinator does the single shared poll).
   reauthentication-flow:
     status: exempt
     comment: No user credentials are involved; the integration uses a public, non-expiring read-only token.

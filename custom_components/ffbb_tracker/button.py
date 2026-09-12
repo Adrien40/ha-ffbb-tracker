@@ -12,6 +12,10 @@ from . import FFBBConfigEntry
 from .const import DOMAIN
 from .coordinator import FFBBDataUpdateCoordinator
 
+# The button only requests a (debounced) coordinator refresh; it performs
+# no direct network I/O itself, so there is nothing to throttle here.
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
