@@ -5,7 +5,7 @@
 [![GitHub Release](https://img.shields.io/github/v/release/Adrien40/ha-ffbb-tracker)](https://github.com/Adrien40/ha-ffbb-tracker/releases)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-Une **intégration complète pour Home Assistant** qui suit les résultats, calendriers et classements de vos équipes de Basketball engagées en championnats FFBB (Fédération Française de Basketball), sans compte ni clé privée requise. 🛡️
+Une **intégration complète pour Home Assistant** qui suit les résultats, calendriers et classements de vos équipes de basketball engagées en championnats FFBB (Fédération Française de BasketBall), sans compte ni clé privée requise. 🛡️
 
 > ℹ️ **À savoir** : Cette intégration interroge l'API publique Directus utilisée par l'application web officielle `competitions.ffbb.com`, avec le même jeton d'accès public (lecture seule) et le même User-Agent de navigateur que le site officiel. Aucun compte ni identifiant personnel n'est nécessaire. Elle récupère l'ensemble des rencontres, résultats et classements de la poule en une seule requête optimisée.
 
@@ -49,7 +49,7 @@ Si ce projet vous est utile, vous pouvez soutenir son développement 🙏
 ---
 
 ### 💡 Pourquoi cette intégration ?
-Conçue pour les joueuses, joueurs, parents et supporters de Basketball amateur ou professionnel souhaitant intégrer leur passion dans leur domotique :
+Conçue pour les joueuses, joueurs, parents et supporters de basketball amateur ou professionnel souhaitant intégrer leur passion dans leur domotique :
 
 * **🛡️ Zéro compte à créer :** Aucun identifiant ni mot de passe personnel requis, l'intégration utilise le jeton de consultation public de l'application fédérale.
 * **🚗 Guidage immédiat vers les salles :** Plus besoin de chercher l'adresse du gymnase le samedi après-midi ; l'adresse complète avec code postal et les liens de navigation GPS sont prêts sur votre tableau de bord ou dans vos alertes mobiles.
@@ -202,7 +202,7 @@ Si vous souhaitez voir l'intégration traduite dans une autre langue ou contribu
 Pour tout bug ou demande d'amélioration, merci d'ouvrir une [Issue](https://github.com/Adrien40/ha-ffbb-tracker/issues) sur ce dépôt.
 
 ### ⚖️ Licence et avertissement
-Projet sous licence **GPLv3**. Il s'agit d'un projet indépendant, sans aucun lien officiel avec la Fédération Française de Basketball (FFBB). L'utilisation de ce logiciel se fait sous votre propre responsabilité.
+Projet sous licence **GPLv3**. Il s'agit d'un projet indépendant, sans aucun lien officiel avec la Fédération Française de BasketBall (FFBB). L'utilisation de ce logiciel se fait sous votre propre responsabilité.
 
 ---
 

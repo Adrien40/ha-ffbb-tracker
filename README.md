@@ -5,7 +5,7 @@
 [![GitHub Release](https://img.shields.io/github/v/release/Adrien40/ha-ffbb-tracker)](https://github.com/Adrien40/ha-ffbb-tracker/releases)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-A **comprehensive Home Assistant integration** to track match results, schedules, and standings for Basketball teams competing in FFBB (French Basketball Federation) championships, with no user account or private API key required. 🛡️
+A **comprehensive Home Assistant integration** to track match results, schedules, and standings for basketball teams competing in FFBB (French Basketball Federation) championships, with no user account or private API key required. 🛡️
 
 > ℹ️ **Good to know**: This integration queries the public Directus API used by the official `competitions.ffbb.com` web app, reusing the same public, read-only access token and browser User-Agent as the official site. No personal account or credentials are required. It fetches fixtures, results, and pool standings in a single optimized request.
 
@@ -49,7 +49,7 @@ If you find this project useful, you can support its development 🙏
 ---
 
 ### 💡 Why this integration?
-Designed for Basketball players, parents, coaches, and supporters wishing to integrate team schedules and results into their smart home:
+Designed for basketball players, parents, coaches, and supporters wishing to integrate team schedules and results into their smart home:
 
 * **🛡️ Zero account needed:** No personal credentials or private tokens required; the integration utilizes the public token provided for federal mobile web apps.
 * **🚗 Instant GPS navigation:** No more searching for gym addresses on game days; complete street addresses, postal codes, and direct GPS launch links are available in your dashboard and notification engines.
