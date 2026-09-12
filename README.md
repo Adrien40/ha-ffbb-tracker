@@ -19,6 +19,7 @@ If you find this project useful, you can support its development 🙏
 - 🏀 Full tracking of your favorite teams (Departmental, Regional, National)
 - 📅 Complete match schedule natively synchronized in Home Assistant
 - ⏱️ Live next match details: date, opponent, home or away status
+- 🏀 Ready-to-use "Game day" and "Match in progress" binary sensors for simple automations, no templating needed
 - 📍 One-click directions: direct Google Maps and Waze gym links generated in entity attributes
 - 🏆 Last played match: final score, opponent, and outcome (win, loss, draw)
 - 📊 Pool standings and dynamic rank evolution tracking (+1, -2, 0) with persistence across restarts
@@ -105,12 +106,14 @@ While waiting for inclusion in the default HACS repository list, you can easily 
 
 ### 📊 Available Sensors and Entities
 
-Each configured team creates a dedicated device exposing 11 sensors, 1 button, and 1 calendar:
+Each configured team creates a dedicated device exposing 11 sensors, 2 binary sensors, 1 button, and 1 calendar:
 
 | Entity | Class / Unit | Description |
 | :--- | :--- | :--- |
 | 🔄 **Refresh** | Button | Manually triggers an immediate coordinator update. |
 | 🗓️ **Schedule Calendar** | Calendar | Official calendar containing all scheduled and completed fixtures for the pool. |
+| 🏀 **Game Day** | Binary sensor | On whenever the tracked team has a match scheduled for today (local date). |
+| 🏟️ **Match in Progress** | Binary sensor | On from shortly before kickoff until the result is published (or the waiting window expires). |
 | 📊 **Standings** | Integer | Current position of the team in its pool. *(Includes full standings table in attributes)* |
 | 📈 **Rank Evolution** | Text | Position difference (`+1`, `-2`, `0`) with dynamic icon. |
 | 📅 **Last Match: Date** | Timestamp | Date and time of the last played game. |
@@ -174,6 +177,24 @@ action:
     entity_id:
       - notify.telegram
 ```
+
+---
+
+### ⚠️ Known Limitations
+
+* **Engagement ID changes between seasons**: The FFBB re-assigns a new internal engagement ID to each team every season. If a tracked team's entities stop updating and stay unavailable for several days while the season is clearly still active, the most likely cause is that the team's engagement ID has changed. Use **Settings** > **Devices & services** > **FFBB Tracker** > **Reconfigure** to search for the team again and pick it up under its new ID — this keeps your existing automations and dashboard cards working, since the device and entity IDs are not affected by this operation.
+* **No official API**: This integration relies on the public Directus endpoints used by the official web app rather than a documented, stable API. Breaking changes on the FFBB's side (schema changes, stricter bot filtering) can affect the integration without notice; see the [Troubleshooting](#-troubleshooting) section and open an [issue](https://github.com/Adrien40/ha-ffbb-tracker/issues) if something stops working.
+
+---
+
+### 🗑️ Uninstalling
+
+1. Go to **Settings** > **Devices & services**, open the **FFBB Tracker** integration, and remove each configured team (three-dot menu > **Delete**). This also removes the associated device and all its entities from the entity registry.
+2. If installed via HACS: open **HACS** > **FFBB Tracker**, and select **Remove**.
+3. If installed manually: delete the `custom_components/ffbb_tracker` folder from your Home Assistant configuration directory.
+4. Restart Home Assistant.
+
+No credentials, tokens, or external accounts are created by this integration, so there is nothing to revoke elsewhere.
 
 ---
 

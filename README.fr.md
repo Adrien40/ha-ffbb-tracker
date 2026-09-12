@@ -19,6 +19,7 @@ Si ce projet vous est utile, vous pouvez soutenir son développement 🙏
 - 🏀 Suivi complet de vos équipes préférées (Départemental, Régional, National)
 - 📅 Calendrier complet des matchs synchronisé nativement dans Home Assistant
 - ⏱️ Prochain match en direct : date, adversaire, statut domicile ou extérieur
+- 🏀 Capteurs binaires « Jour de match » et « Match en cours » prêts à l'emploi pour des automatisations simples, sans template
 - 📍 Itinéraires en un clic : liens directs Google Maps et Waze vers la salle générés automatiquement dans les attributs
 - 🏆 Dernier match joué : score, adversaire et issue de la rencontre (victoire, défaite, nul)
 - 📊 Classement de la poule et suivi dynamique de l'évolution de la position (gain/perte de places) avec persistance après redémarrage
@@ -105,12 +106,14 @@ Ce dépôt n'étant pas encore dans la liste officielle par défaut, vous pouvez
 
 ### 📊 Capteurs et entités disponibles
 
-Chaque équipe configurée crée un appareil dédié regroupant 11 capteurs, 1 bouton et 1 calendrier :
+Chaque équipe configurée crée un appareil dédié regroupant 11 capteurs, 2 capteurs binaires, 1 bouton et 1 calendrier :
 
 | Entité | Classe / Unité | Description |
 | :--- | :--- | :--- |
 | 🔄 **Actualiser** | Bouton | Déclenche immédiatement une mise à jour manuelle des données de l'équipe. |
 | 🗓️ **Calendrier des matchs** | Calendrier | Calendrier officiel regroupant tous les matchs prévus et terminés de la poule. |
+| 🏀 **Jour de match** | Capteur binaire | Actif dès que l'équipe suivie a un match prévu aujourd'hui (date locale). |
+| 🏟️ **Match en cours** | Capteur binaire | Actif peu avant le coup d'envoi jusqu'à la publication du résultat (ou l'expiration du délai d'attente). |
 | 📊 **Classement** | Entier | Position actuelle de l'équipe dans sa poule. *(Contient le tableau complet du classement en attribut)* |
 | 📈 **Classement : Évolution** | Texte | Évolution de la position (`+1`, `-2`, `0`) avec icône adaptative. |
 | 📅 **Dernier match : Date** | Timestamp | Date et heure du dernier match joué. |
@@ -174,6 +177,24 @@ action:
       entity_id:
         - notify.telegram
 ```
+
+---
+
+### ⚠️ Limitations connues
+
+* **Changement d'identifiant d'engagement entre les saisons** : La FFBB réattribue un nouvel identifiant d'engagement interne à chaque équipe à chaque saison. Si les entités d'une équipe suivie cessent de se mettre à jour et restent indisponibles plusieurs jours alors que la saison est manifestement en cours, la cause la plus probable est que l'identifiant d'engagement de l'équipe a changé. Utilisez **Paramètres** > **Appareils et services** > **FFBB Tracker** > **Reconfigurer** pour rechercher à nouveau l'équipe et la récupérer sous son nouvel identifiant — cela conserve vos automatisations et cartes de tableau de bord existantes, car l'appareil et les identifiants d'entités ne sont pas affectés par cette opération.
+* **Pas d'API officielle** : Cette intégration s'appuie sur les points d'accès Directus publics utilisés par l'application web officielle, et non sur une API documentée et stable. Des changements côté FFBB (modification du schéma, filtrage anti-robot plus strict) peuvent affecter l'intégration sans préavis ; consultez la section [Dépannage](#-dépannage) et ouvrez une [issue](https://github.com/Adrien40/ha-ffbb-tracker/issues) si quelque chose cesse de fonctionner.
+
+---
+
+### 🗑️ Désinstallation
+
+1. Rendez-vous dans **Paramètres** > **Appareils et services**, ouvrez l'intégration **FFBB Tracker**, et supprimez chaque équipe configurée (menu à trois points > **Supprimer**). Cela retire également l'appareil associé et toutes ses entités du registre.
+2. Si installé via HACS : ouvrez **HACS** > **FFBB Tracker**, puis sélectionnez **Supprimer**.
+3. Si installé manuellement : supprimez le dossier `custom_components/ffbb_tracker` de votre répertoire de configuration Home Assistant.
+4. Redémarrez Home Assistant.
+
+Cette intégration ne crée aucun identifiant, jeton ou compte externe : il n'y a donc rien à révoquer ailleurs.
 
 ---
 
