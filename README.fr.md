@@ -281,11 +281,10 @@ actions:
         clickAction: noAction
         actions: >-
           {% set gmaps = state_attr('sensor.mon_equipe_prochain_match_lieu',
-          'google_maps_url') | default('', true) %} {% set waze =
+          'google_maps_url') | default('', true) %} {% set waze_clean =
           state_attr('sensor.mon_equipe_prochain_match_lieu', 'waze_url') |
-          default('', true) %} {% set waze_clean = waze |
-          replace('https://waze.com', 'https://www.waze.com') | replace('+',
-          '%20') %} {% set buttons = [{'action': 'refresh_match', 'title': '🔄
+          default('', true) | replace('+', '%20') %} {% set buttons =
+          [{'action': 'refresh_match', 'title': '🔄
           Actualiser'}] %} {% if gmaps.startswith('http') %}
             {% set buttons = buttons + [{'action': 'URI', 'title': '🗺️ Maps', 'uri': gmaps}] %}
           {% endif %} {% if waze_clean.startswith('http') %}
