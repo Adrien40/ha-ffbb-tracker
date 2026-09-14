@@ -297,14 +297,6 @@ max_exceeded: silent
 
 </details>
 
-#### Exemple : récupérer les 3 prochains matchs dans un script
-```yaml
-action: ffbb_tracker.get_next_matches
-data:
-  limit: 3
-response_variable: agenda_basket
-```
-
 #### Blueprints prêts à l'emploi (sans template)
 
 Vous préférez cliquer plutôt qu'écrire du YAML ? Trois blueprints d'automatisation sont fournis dans [`blueprints/automation/ffbb_tracker`](blueprints/automation/ffbb_tracker), basés sur les entités `event` ci-dessus : ils ne se déclenchent qu'une fois par résultat/changement, jamais au redémarrage.
