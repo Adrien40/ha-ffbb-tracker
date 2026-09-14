@@ -65,7 +65,7 @@ Designed for basketball players, parents, coaches, and supporters wishing to int
 
 ### ✅ Compatibility and Requirements
 * 🏷️ **Supported competitions**: All teams and championships available on `competitions.ffbb.com` (seniors, youth, departmental, regional, and national divisions).
-* ⚙️ **Required Home Assistant version**: Version 2026.2.3 or higher.
+* ⚙️ **Required Home Assistant version**: Version 2026.3.0 or higher.
 * 🌐 **Internet connection**: Required to fetch data from federation servers.
 * 🔍 **Search methods**:
   * By club or city name (e.g., *Basket Landes*, *Paris*).
