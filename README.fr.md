@@ -163,6 +163,10 @@ Les entités `next_match_location` (Lieu) et `next_match_opponent` (Adversaire) 
 ### 🛠️ Actions et automatisations (exemples)
 
 #### Exemple : notification le matin du match via le capteur binaire
+
+<details>
+  <summary>Voir l'automatisation YAML</summary>
+
 ```yaml
 alias: "Basket - Rappel Jour de Match"
 trigger:
