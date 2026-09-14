@@ -296,14 +296,6 @@ max_exceeded: silent
 
 </details>
 
-#### Example: Query next 3 matches in a script
-```yaml
-action: ffbb_tracker.get_next_matches
-data:
-  limit: 3
-response_variable: basketball_schedule
-```
-
 #### Ready-made blueprints (no templating needed)
 
 Prefer clicking over writing YAML? Three automation blueprints ship in [`blueprints/automation/ffbb_tracker`](blueprints/automation/ffbb_tracker), built on the `event` entities above so they fire once per result/rank change and never replay on restart:
