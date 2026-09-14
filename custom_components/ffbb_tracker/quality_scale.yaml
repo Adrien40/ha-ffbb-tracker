@@ -248,7 +248,7 @@ rules:
   icon-translations:
     status: done
     comment: >
-      icons.json now covers every entity in the integration -- all 11
+      icons.json now covers every entity in the integration -- all 12
       sensors, both binary sensors, the button, the calendar, and both
       events -- not just rank_evolution's range-based icon. Every
       _attr_icon = "mdi:..." previously hardcoded in sensor.py,
