@@ -162,7 +162,11 @@ The `next_match_location` and `next_match_opponent` entities expose attributes d
 
 ### 🛠️ Actions and Automations (Examples)
 
-#### Example: Game day morning reminder using the binary sensor
+#### Example: Interactive match-eve notification and schedule alerts (Companion App)
+
+<details>
+<summary>📱 View full mobile app automation example</summary>
+
 ```yaml
 alias: Basketball - Team Tracker (Companion)
 description: >-
@@ -289,6 +293,8 @@ actions:
 mode: restart
 max_exceeded: silent
 ```
+
+</details>
 
 #### Example: Query next 3 matches in a script
 ```yaml

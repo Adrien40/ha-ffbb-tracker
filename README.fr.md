@@ -162,7 +162,11 @@ Les entités `next_match_location` (Lieu) et `next_match_opponent` (Adversaire) 
 
 ### 🛠️ Actions et automatisations (exemples)
 
-#### Exemple : notification le matin du match via le capteur binaire
+#### Exemple : notification interactive veille de match et alertes (Application Companion)
+
+<details>
+<summary>📱 Voir l'exemple d'automatisation complète pour l'application mobile</summary>
+
 ```yaml
 alias: Basket - Suivi Mon Équipe (Companion)
 description: >-
@@ -290,6 +294,8 @@ actions:
 mode: restart
 max_exceeded: silent
 ```
+
+</details>
 
 #### Exemple : récupérer les 3 prochains matchs dans un script
 ```yaml
