@@ -78,13 +78,18 @@ variables:
   event_entity: !input match_finished_event
   notify_non_win_results: !input notify_non_win_results
   refresh_cmd: !input refresh_command
-  team_title: >-
+  team_title_raw: >-
     {% if team_title_input | trim != '' %}
       {{ team_title_input }}
     {% else %}
       {% set dev_id = device_id(event_entity) %}
       {{ device_attr(dev_id, 'name') if dev_id else 'FFBB Tracker' }}
     {% endif %}
+  # HTML-escaped for parse_mode: html below -- team/competition names come
+  # from the FFBB API and can contain &, <, > (club names, sponsors...),
+  # which would otherwise break or truncate the Telegram message.
+  team_title: >-
+    {{ team_title_raw | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') }}
 
 triggers:
   - trigger: state
@@ -237,7 +242,9 @@ actions:
           {%- set gym_city = state_attr(ns.last_date, 'gym_city') -%}
         {%- endif -%}
         {%- set gym_info = (gym_name ~ (', ' ~ gym_city if gym_city else '')) if gym_name else none -%}
-        {%- set gym_str = gym_info | title if gym_info else 'Salle non renseignée' -%}
+        {%- set gym_str_raw = gym_info | title if gym_info else 'Salle non renseignée' -%}
+        {%- set gym_str = gym_str_raw | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') -%}
+        {%- set opponent_html = (opponent | title) | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') -%}
 
         {# 8. Série et Forme #}
         {%- set streak = state_attr(ns.form, 'current_streak') if ns.form else none -%}
@@ -249,7 +256,7 @@ actions:
 
         {{ statut }}
 
-        👥 <b>Adversaire :</b> {{ opponent | title }}
+        👥 <b>Adversaire :</b> {{ opponent_html }}
         🔢 <b>Score :</b> {% if team_score is not none and opponent_score is not none %}{{ team_score }} - {{ opponent_score }}{% else %}Non communiqué{% endif %}
         📅 <b>Date :</b> {{ date_str }} ({{ round_str }})
         🏟️ <b>Terrain :</b> {{ terrain_str }} ({{ gym_str }})

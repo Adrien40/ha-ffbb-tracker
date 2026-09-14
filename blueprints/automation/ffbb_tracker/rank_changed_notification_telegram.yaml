@@ -77,13 +77,18 @@ variables:
   event_entity: !input rank_changed_event
   direction_filter: !input direction_filter
   refresh_cmd: !input refresh_command
-  team_title: >-
+  team_title_raw: >-
     {% if team_title_input | trim != '' %}
       {{ team_title_input }}
     {% else %}
       {% set dev_id = device_id(event_entity) %}
       {{ device_attr(dev_id, 'name') if dev_id else 'FFBB Tracker' }}
     {% endif %}
+  # HTML-escaped for parse_mode: html below -- team/competition names come
+  # from the FFBB API and can contain &, <, > (club names, sponsors...),
+  # which would otherwise break or truncate the Telegram message.
+  team_title: >-
+    {{ team_title_raw | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') }}
 
 triggers:
   - trigger: state

@@ -69,13 +69,18 @@ variables:
   opponent_sensor: !input next_match_opponent_sensor
   location_sensor: !input next_match_location_sensor
   refresh_cmd: !input refresh_command
-  team_title: >-
+  team_title_raw: >-
     {% if team_title_input | trim != '' %}
       {{ team_title_input }}
     {% else %}
       {% set dev_id = device_id(date_sensor) %}
       {{ device_attr(dev_id, 'name') if dev_id else 'Match de basket' }}
     {% endif %}
+  # HTML-escaped for parse_mode: html below -- team/competition names come
+  # from the FFBB API and can contain &, <, > (club names, sponsors...),
+  # which would otherwise break or truncate the Telegram message.
+  team_title: >-
+    {{ team_title_raw | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') }}
 
 triggers:
   - trigger: time
@@ -143,6 +148,8 @@ actions:
         {%- set days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'] -%}
         {%- set months = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'] -%}
         {%- set lieu = states(location_sensor) -%}
+        {%- set lieu_html = lieu | title | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') -%}
+        {%- set opponent_html = states(opponent_sensor) | title | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') -%}
         {%- set is_home = state_attr(location_sensor, 'is_home') -%}
         {%- set map_search_url = 'https://www.google.com/maps/search/?api=1&query=' ~ (lieu | urlencode) -%}
         {%- if trigger is defined and trigger.id is defined and trigger.id == 'alerte_ffbb' -%}
@@ -163,15 +170,18 @@ actions:
 
         {{ statut }}
 
-        👥 <b>Adversaire :</b> {{ states(opponent_sensor) | title }}
+        👥 <b>Adversaire :</b> {{ opponent_html }}
         📅 <b>Date :</b> {% if dt is not none %}{{ days[dt.weekday()] }} {{ dt.day }} {{ months[dt.month - 1] }}{% else %}Date inconnue{% endif %}
         ⏰ <b>Coup d'envoi :</b> {% if dt is not none %}{{ dt.strftime('%Hh%M') }}{% else %}Inconnu{% endif %}
         🏟️ <b>Terrain :</b> {% if is_home %}🏠 Domicile{% else %}🚗 Extérieur{% endif %}
-        📍 <b>Lieu :</b> {{ lieu | title if has_value(location_sensor) else 'Non renseigné' }}{% if has_value(location_sensor) %} <a href="{{ map_search_url | replace('&', '&amp;') }}">🗺️</a>{% endif %}
+        📍 <b>Lieu :</b> {{ lieu_html if has_value(location_sensor) else 'Non renseigné' }}{% if has_value(location_sensor) %} <a href="{{ map_search_url | replace('&', '&amp;') }}">🗺️</a>{% endif %}
       inline_keyboard: >-
         {% set gmaps = state_attr(location_sensor, 'google_maps_url') | default('', true) %}
-        {% set waze = state_attr(location_sensor, 'waze_url') | default('', true) %}
-        {% set waze_clean = waze | replace('https://waze.com', 'https://www.waze.com') | replace('+', '%20') %}
+        {# waze_url from the sensor is already built on www.waze.com (see sensor.py);
+           only the literal-'+' guard against addresses containing a '+' character
+           is still needed here (quote() leaves '+' unescaped, which some Waze
+           versions misread as a space). #}
+        {% set waze_clean = state_attr(location_sensor, 'waze_url') | default('', true) | replace('+', '%20') %}
         {% set buttons = [ ['🔄 Actualiser', refresh_cmd] ] %}
         {% if gmaps.startswith('http') %}
           {% set buttons = buttons + [ ['🗺️ Maps', gmaps] ] %}
