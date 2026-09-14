@@ -28,7 +28,7 @@ If you find this project useful, you can support its development 🙏
 - 🧩 Ready-to-import automation blueprints for Telegram notifications, no templating required
 - 🛠️ Three action services ready for automations and notification scripts (Telegram, pre-game alerts)
 - 🔧 Automatic repair notification if a team can no longer be found (season rollover), pointing you straight to Reconfigure
-- 🔍 Fast setup: search by club name, federal club code, or direct team URL copy-paste
+- 🔍 Fast setup: search by club name, official club code (e.g. NAQ0040141), or direct team URL copy-paste
 - ⚙️ Simple 2-minute installation via HACS
 
 ---
@@ -56,17 +56,17 @@ If you find this project useful, you can support its development 🙏
 ### 💡 Why this integration?
 Designed for basketball players, parents, coaches, and supporters wishing to integrate team schedules and results into their smart home:
 
-* **🛡️ Zero account needed:** No personal credentials or private tokens required; the integration utilizes the public token provided for federal mobile web apps.
+* **🛡️ Zero account needed:** No personal credentials or private tokens required; the integration utilizes the public token provided for official FFBB web apps.
 * **🚗 Instant GPS navigation:** No more searching for gym addresses on game days; complete street addresses, postal codes, and direct GPS launch links are available in your dashboard and notification engines.
 * **📈 Reliable rank tracking:** Position changes (+1, -2, 0) are saved to Home Assistant permanent storage and persist across system restarts without losing track of previous standings.
-* **⚡ Lightweight and polite:** Polling is centralized per pool to minimize requests and prevent unnecessary load on federal servers.
+* **⚡ Lightweight and polite:** Polling is centralized per pool to minimize requests and prevent unnecessary load on FFBB servers.
 
 ---
 
 ### ✅ Compatibility and Requirements
 * 🏷️ **Supported competitions**: All teams and championships available on `competitions.ffbb.com` (seniors, youth, departmental, regional, and national divisions).
 * ⚙️ **Required Home Assistant version**: Version 2026.3.0 or higher.
-* 🌐 **Internet connection**: Required to fetch data from federation servers.
+* 🌐 **Internet connection**: Required to fetch data from FFBB servers.
 * 🔍 **Search methods**:
   * By club or city name (e.g., *Basket Landes*, *Paris*).
   * By official club code (e.g., *NAQ0040141*).
