@@ -7,7 +7,7 @@
 
 Une **intégration complète pour Home Assistant** qui suit les résultats, calendriers et classements de vos équipes de basketball engagées en championnats FFBB (Fédération Française de BasketBall), sans compte ni clé privée requise. 🛡️
 
-> ℹ️ **À savoir** : Cette intégration interroge l'API publique Directus utilisée par l'application web officielle `competitions.ffbb.com`, avec le même jeton d'accès public (lecture seule) et le même User-Agent de navigateur que le site officiel. Aucun compte ni identifiant personnel n'est nécessaire. Elle récupère l'ensemble des rencontres, résultats et classements de la poule en une seule requête optimisée.
+> ℹ️ **À savoir** : cette intégration interroge l'API publique Directus utilisée par l'application web officielle `competitions.ffbb.com`, avec le même jeton d'accès public (lecture seule) et le même User-Agent de navigateur que le site officiel. Aucun compte ni identifiant personnel n'est nécessaire. Elle récupère l'ensemble des rencontres, résultats et classements de la poule en une seule requête optimisée.
 
 Si ce projet vous est utile, vous pouvez soutenir son développement 🙏
 
@@ -28,7 +28,7 @@ Si ce projet vous est utile, vous pouvez soutenir son développement 🙏
 - 🧩 Blueprints d'automatisation prêts à importer pour les notifications Telegram, sans template à écrire
 - 🛠️ Trois actions de service prêtes pour vos automatisations et scripts de notifications (Telegram, alertes d'avant-match)
 - 🔧 Notification de réparation automatique si une équipe devient introuvable (changement de saison), avec un lien direct vers Reconfigurer
-- 🔍 Ajout en quelques secondes : recherche par nom de club, code fédéral ou simple copier-coller de l'URL de l'équipe
+- 🔍 Ajout en quelques secondes : recherche par nom de club, code officiel (ex. NAQ0040141) ou simple copier-coller de l'URL de l'équipe
 - ⚙️ Installation via HACS en 2 minutes
 
 ---
@@ -56,17 +56,17 @@ Si ce projet vous est utile, vous pouvez soutenir son développement 🙏
 ### 💡 Pourquoi cette intégration ?
 Conçue pour les joueuses, joueurs, parents et supporters de basketball amateur ou professionnel souhaitant intégrer leur passion dans leur domotique :
 
-* **🛡️ Zéro compte à créer :** Aucun identifiant ni mot de passe personnel requis, l'intégration utilise le jeton de consultation public de l'application fédérale.
-* **🚗 Guidage immédiat vers les salles :** Plus besoin de chercher l'adresse du gymnase le samedi après-midi ; l'adresse complète avec code postal et les liens de navigation GPS sont prêts sur votre tableau de bord ou dans vos alertes mobiles.
-* **📈 Suivi de classement fiable :** L'évolution de votre équipe au classement (+1, -2, =) est mémorisée dans le stockage interne de Home Assistant et survit aux redémarrages sans perte d'historique.
-* **⚡ Économe et respectueuse :** Une interrogation cadencée et centralisée par poule pour éviter de solliciter inutilement les serveurs fédéraux.
+* **🛡️ Zéro compte à créer :** aucun identifiant ni mot de passe personnel requis, l'intégration utilise le jeton de consultation public de l'application FFBB.
+* **🚗 Guidage immédiat vers les salles :** plus besoin de chercher l'adresse du gymnase le samedi après-midi ; l'adresse complète avec code postal et les liens de navigation GPS sont prêts sur votre tableau de bord ou dans vos alertes mobiles.
+* **📈 Suivi de classement fiable :** l'évolution de votre équipe au classement (+1, -2, =) est mémorisée dans le stockage interne de Home Assistant et survit aux redémarrages sans perte d'historique.
+* **⚡ Économe et respectueuse :** une interrogation cadencée et centralisée par poule pour éviter de solliciter inutilement les serveurs FFBB.
 
 ---
 
 ### ✅ Compatibilité et prérequis
-* 🏷️ **Compétitions supportées** : Toutes les équipes et compétitions répertoriées sur `competitions.ffbb.com` (seniors, jeunes, championnats départementaux, régionaux et nationaux).
-* ⚙️ **Version Home Assistant requise** : Version 2026.3.0 ou supérieure recommandée.
-* 🌐 **Connexion internet** : Requise pour actualiser les données depuis les serveurs de la fédération.
+* 🏷️ **Compétitions supportées** : toutes les équipes et compétitions répertoriées sur `competitions.ffbb.com` (seniors, jeunes, championnats départementaux, régionaux et nationaux).
+* ⚙️ **Version Home Assistant requise** : version 2026.3.0 ou supérieure recommandée.
+* 🌐 **Connexion internet** : requise pour actualiser les données depuis les serveurs de la FFBB.
 * 🔍 **Recherche simple** :
   * Par nom de club ou de commune (ex. : *Basket Landes*, *Paris*).
   * Par code officiel de club (ex. : *NAQ0040141*).
@@ -75,18 +75,18 @@ Conçue pour les joueuses, joueurs, parents et supporters de basketball amateur 
 ---
 
 ### ✨ Points forts
-* 📅 **Calendrier natif Home Assistant** : Visualisez l'ensemble de la saison dans la vue Calendrier avec l'heure exacte, le numéro de journée, le score final et le nom complet de la salle.
-* 🚗 **Navigation GPS intégrée** : Liens profonds Waze et Google Maps prêts à l'emploi dans les attributs pour démarrer le guidage en un clic.
-* 📈 **Capteur d'évolution de classement** : Calcule le gain ou la perte de position entre deux mises à jour, avec icône dynamique adaptative (flèche montante, flèche descendante ou tiret).
-* 📊 **Capteur de forme récente** : Chaîne compacte des 5 derniers résultats (ex. `V-V-D-V-N`), avec le nombre de victoires/défaites/nuls et la série en cours en attributs.
+* 📅 **Calendrier natif Home Assistant** : visualisez l'ensemble de la saison dans la vue Calendrier avec l'heure exacte, le numéro de journée, le score final et le nom complet de la salle.
+* 🚗 **Navigation GPS intégrée** : liens profonds Waze et Google Maps prêts à l'emploi dans les attributs pour démarrer le guidage en un clic.
+* 📈 **Capteur d'évolution de classement** : calcule le gain ou la perte de position entre deux mises à jour, avec icône dynamique adaptative (flèche montante, flèche descendante ou tiret).
+* 📊 **Capteur de forme récente** : chaîne compacte des 5 derniers résultats (ex. `V-V-D-V-N`), avec le nombre de victoires/défaites/nuls et la série en cours en attributs.
 * ⚡ **Entités événementielles pour des automatisations instantanées** : `event.*_match_finished` se déclenche une seule fois par nouveau résultat (victoire/défaite/nul), et `event.*_rank_changed` une seule fois quand la position en poule bouge réellement — les deux survivent aux redémarrages sans se redéclencher sur une ancienne donnée, contrairement à un déclencheur basé sur l'état d'un capteur.
-* 🔄 **Reconfiguration simplifiée** : Changez d'équipe ou de poule directement depuis le bouton « Reconfigurer » sans supprimer l'intégration ni laisser d'appareils fantômes dans le registre.
+* 🔄 **Reconfiguration simplifiée** : changez d'équipe ou de poule directement depuis le bouton « Reconfigurer » sans supprimer l'intégration ni laisser d'appareils fantômes dans le registre.
 * 🛠️ **Actions dédiées (services)** :
-  * `ffbb_tracker.refresh` : Force l'actualisation manuelle immédiate des données.
-  * `ffbb_tracker.get_next_matches` : Renvoie les prochains matchs sous forme de dictionnaire exploitable par vos automatisations.
-  * `ffbb_tracker.get_standings` : Renvoie la grille complète du classement de la poule (points, victoires, défaites, matchs joués).
-* 🔄 **Bouton d'actualisation manuelle** : Une entité `button` pour forcer la mise à jour des données à tout moment sans attendre le cycle de scrutation.
-* ⚙️ **Cadence dynamique et suivi de direct** : Réglez l'intervalle de base (15 à 1 440 min), activez l'accélération les jours de match (2 à 15 min) et ajustez la fenêtre d'attente du score.
+  * `ffbb_tracker.refresh` : force l'actualisation manuelle immédiate des données.
+  * `ffbb_tracker.get_next_matches` : renvoie les prochains matchs sous forme de dictionnaire exploitable par vos automatisations.
+  * `ffbb_tracker.get_standings` : renvoie la grille complète du classement de la poule (points, victoires, défaites, matchs joués).
+* 🔄 **Bouton d'actualisation manuelle** : une entité `button` pour forcer la mise à jour des données à tout moment sans attendre le cycle de scrutation.
+* ⚙️ **Cadence dynamique et suivi de direct** : réglez l'intervalle de base (15 à 1 440 min), activez l'accélération les jours de match (2 à 15 min) et ajustez la fenêtre d'attente du score.
 
 ---
 
@@ -155,7 +155,7 @@ Les entités `next_match_location` (Lieu) et `next_match_opponent` (Adversaire) 
 2. Cliquez sur **Ajouter une intégration** et recherchez **FFBB Tracker**.
 3. Renseignez votre recherche dans le formulaire :
    * **Recherche par club** : tapez quelques lettres du nom du club (ex. : `Bordeaux` ou `Basket Landes`). Sélectionnez ensuite le club souhaité, puis l'équipe engagée dans la liste proposée.
-   * **Recherche directe** : collez directement l'adresse web de l'équipe copiée depuis le site fédéral (ex. : `https://competitions.ffbb.com/equipes/123456789`) ou collez simplement l'identifiant numérique de l'engagement.
+   * **Recherche directe** : collez directement l'adresse web de l'équipe copiée depuis le site de la FFBB (ex. : `https://competitions.ffbb.com/equipes/123456789`) ou collez simplement l'identifiant numérique de l'engagement.
 4. La détection de la poule et de la compétition est automatique.
 
 ---
@@ -199,19 +199,19 @@ response_variable: agenda_basket
 
 Vous préférez cliquer plutôt qu'écrire du YAML ? Trois blueprints d'automatisation sont fournis dans [`blueprints/automation/ffbb_tracker`](blueprints/automation/ffbb_tracker), basés sur les entités `event` ci-dessus : ils ne se déclenchent qu'une fois par résultat/changement, jamais au redémarrage.
 
-* **Pack complet de notifications Telegram** : Rappel de veille de match et boutons interactifs (Actualiser, Maps, Waze) pour une équipe.
+* **Pack complet de notifications Telegram** : rappel de veille de match et boutons interactifs (Actualiser, Maps, Waze) pour une équipe.
   [![Ouvrez votre instance Home Assistant et importez ce blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FAdrien40%2Fha-ffbb-tracker%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fffbb_tracker%2Fmatch_notifications_telegram.yaml)
-* **Notification de résultat de match** : Message Telegram avec adversaire, score et terrain dès qu'un nouveau résultat tombe.
+* **Notification de résultat de match** : message Telegram avec adversaire, score et terrain dès qu'un nouveau résultat tombe.
   [![Ouvrez votre instance Home Assistant et importez ce blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FAdrien40%2Fha-ffbb-tracker%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fffbb_tracker%2Fmatch_result_notification_telegram.yaml)
-* **Notification de changement de classement** : Message Telegram avec l'ancienne et la nouvelle position dès qu'elle bouge.
+* **Notification de changement de classement** : message Telegram avec l'ancienne et la nouvelle position dès qu'elle bouge.
   [![Ouvrez votre instance Home Assistant et importez ce blueprint.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FAdrien40%2Fha-ffbb-tracker%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fffbb_tracker%2Frank_changed_notification_telegram.yaml)
   
 ---
 
 ### ⚠️ Limitations connues
 
-* **Changement d'identifiant d'engagement entre les saisons** : La FFBB réattribue un nouvel identifiant d'engagement interne à chaque équipe à chaque saison. Si les entités d'une équipe suivie cessent de se mettre à jour et restent indisponibles plusieurs jours alors que la saison est manifestement en cours, la cause la plus probable est que l'identifiant d'engagement de l'équipe a changé. Passé 3 jours dans cet état, l'intégration lève désormais automatiquement une notification de réparation (**Paramètres** > **Système** > **Réparations**) qui pointe directement vers la solution. Dans tous les cas, utilisez **Paramètres** > **Appareils et services** > **FFBB Tracker** > **Reconfigurer** pour rechercher à nouveau l'équipe et la récupérer sous son nouvel identifiant — cela conserve vos automatisations et cartes de tableau de bord existantes, car l'appareil et les identifiants d'entités ne sont pas affectés par cette opération.
-* **Pas d'API officielle** : Cette intégration s'appuie sur les points d'accès Directus publics utilisés par l'application web officielle, et non sur une API documentée et stable. Des changements côté FFBB (modification du schéma, filtrage anti-robot plus strict) peuvent affecter l'intégration sans préavis ; consultez la section [Dépannage](#-dépannage) et ouvrez une [issue](https://github.com/Adrien40/ha-ffbb-tracker/issues) si quelque chose cesse de fonctionner.
+* **Changement d'identifiant d'engagement entre les saisons** : la FFBB réattribue un nouvel identifiant d'engagement interne à chaque équipe à chaque saison. Si les entités d'une équipe suivie cessent de se mettre à jour et restent indisponibles plusieurs jours alors que la saison est manifestement en cours, la cause la plus probable est que l'identifiant d'engagement de l'équipe a changé. Passé 3 jours dans cet état, l'intégration lève désormais automatiquement une notification de réparation (**Paramètres** > **Système** > **Réparations**) qui pointe directement vers la solution. Dans tous les cas, utilisez **Paramètres** > **Appareils et services** > **FFBB Tracker** > **Reconfigurer** pour rechercher à nouveau l'équipe et la récupérer sous son nouvel identifiant — cela conserve vos automatisations et cartes de tableau de bord existantes, car l'appareil et les identifiants d'entités ne sont pas affectés par cette opération.
+* **Pas d'API officielle** : cette intégration s'appuie sur les points d'accès Directus publics utilisés par l'application web officielle, et non sur une API documentée et stable. Des changements côté FFBB (modification du schéma, filtrage anti-robot plus strict) peuvent affecter l'intégration sans préavis ; consultez la section [Dépannage](#-dépannage) et ouvrez une [issue](https://github.com/Adrien40/ha-ffbb-tracker/issues) si quelque chose cesse de fonctionner.
 
 ---
 
@@ -231,9 +231,9 @@ Cette intégration ne crée aucun identifiant, jeton ou compte externe : il n'y 
 <details>
 <summary>⚠️ Consulter les questions fréquentes</summary>
 
-* **Aucune équipe trouvée lors de la recherche par club** : Certaines associations sportives n'ont pas encore engagé leurs équipes pour la phase suivante, ou la poule n'est pas encore publiée par le comité ou la ligue.
-* **Le lien GPS m'amène au centre-ville et non au gymnase** : Sur certaines petites salles, la commune n'a pas renseigné d'adresse précise auprès de la fédération. Le lien utilise alors le nom de la salle et la ville pour optimiser le calcul d'itinéraire.
-* **Le capteur d'évolution affiche 0 après un redémarrage** : C'est normal lors de la toute première installation ; dès la prochaine actualisation du classement par la FFBB, le différentiel réel (+1, -1, etc.) sera automatiquement calculé et préservé.
+* **Aucune équipe trouvée lors de la recherche par club** : certaines associations sportives n'ont pas encore engagé leurs équipes pour la phase suivante, ou la poule n'est pas encore publiée par le comité ou la ligue.
+* **Le lien GPS m'amène au centre-ville et non au gymnase** : sur certaines petites salles, la commune n'a pas renseigné d'adresse précise auprès de la FFBB. Le lien utilise alors le nom de la salle et la ville pour optimiser le calcul d'itinéraire.
+* **Le capteur d'évolution affiche 0 après un redémarrage** : c'est normal lors de la toute première installation ; dès la prochaine actualisation du classement par la FFBB, le différentiel réel (+1, -1, etc.) sera automatiquement calculé et préservé.
 
 </details>
 
