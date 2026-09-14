@@ -164,27 +164,130 @@ The `next_match_location` and `next_match_opponent` entities expose attributes d
 
 #### Example: Game day morning reminder using the binary sensor
 ```yaml
-alias: "Basketball - Game Day Reminder"
-trigger:
+alias: Basketball - Team Tracker (Companion)
+description: >-
+  Eve reminder, schedule alerts, and interactive refresh via the mobile app
+triggers:
   - trigger: time
-    at: "09:00:00"
-condition:
-  - condition: state
-    entity_id: binary_sensor.my_team_game_day
-    state: "on"
-action:
-  - action: notify.send_message
-    target:
-      entity_id: notify.telegram_home
+    at: "19:00:00"
+    id: eve_reminder
+  - trigger: state
+    entity_id:
+      - sensor.my_team_next_match_date
+      - sensor.my_team_next_match_location
+      - sensor.my_team_next_match_opponent
+    id: schedule_alert
+  - trigger: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: refresh_match
+    id: callback_refresh
+conditions: []
+actions:
+  - if:
+      - condition: trigger
+        id: callback_refresh
+    then:
+      - action: button.press
+        target:
+          entity_id: button.my_team_refresh
+      - delay: "00:00:02"
+  - if:
+      - condition: trigger
+        id: schedule_alert
+    then:
+      - delay: "00:00:02"
+  - condition: template
+    value_template: |-
+      {% if trigger is not defined or trigger.id is not defined %}
+        true
+      {% elif trigger.id == 'callback_refresh' %}
+        true
+      {% elif trigger.id == 'eve_reminder' %}
+        {% set match_dt = as_datetime(states('sensor.my_team_next_match_date')) %}
+        {{ match_dt is not none and match_dt.astimezone().date() == (now().date() + timedelta(days=1)) }}
+      {% elif trigger.id == 'schedule_alert' %}
+        {{ trigger.from_state is not none and
+           trigger.to_state is not none and
+           trigger.to_state.state not in ['unknown', 'unavailable', ''] and
+           trigger.from_state.state != trigger.to_state.state }}
+      {% else %}
+        false
+      {% endif %}
+  - action: notify.mobile_app_smartphone
     data:
+      title: 🏀 My Team
       message: >-
-        🏀 Game day today!
-        Opponent: {{ states('sensor.my_team_next_match_opponent') }}
-        Venue: {{ 'Home' if is_state('sensor.my_team_next_match_venue_type', 'home') else 'Away' }}
-        Tip-off: {{ as_timestamp(states('sensor.my_team_next_match_date')) | timestamp_custom('%H:%M') }}
-        Location: {{ states('sensor.my_team_next_match_location') or 'Not specified' }}
+        {%- set dt =
+        as_datetime(states('sensor.my_team_next_match_date')) -%}
 
-        Directions: {{ state_attr('sensor.my_team_next_match_location', 'waze_url') }}
+        {%- set days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday',
+        'Saturday', 'Sunday'] -%}
+
+        {%- set months = ['January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'] -%}
+
+        {%- set location = states('sensor.my_team_next_match_location') -%}
+
+        {%- set is_home = state_attr('sensor.my_team_next_match_location',
+        'is_home') -%}
+
+        {%- if trigger is defined and trigger.id is defined and trigger.id ==
+        'schedule_alert' -%}
+          {%- if trigger.from_state is not none and trigger.from_state.state not in ['unknown', 'unavailable', ''] -%}
+            {%- set status = '⚠️ Match updated' -%}
+          {%- else -%}
+            {%- set status = '📢 New match scheduled' -%}
+          {%- endif -%}
+        {%- else -%}
+          {%- if dt is not none -%}
+            {%- set delta = (dt.astimezone().date() - now().date()).days -%}
+            {%- set status = '🔥 Match today!' if delta == 0 else ('🔥 Match tomorrow!' if delta == 1 else ('⏳ Match in ' ~ delta ~ ' days!' if delta > 1 else '🏀 Next match')) -%}
+          {%- else -%}
+            {%- set status = '🏀 Next match' -%}
+          {%- endif -%}
+        {%- endif -%}
+
+        {{ status }}
+
+        👥 Opponent: {{ states('sensor.my_team_next_match_opponent')
+        | title }}
+
+        📅 Date: {% if dt is not none %}{{ days[dt.weekday()] }}, {{ months[dt.month - 1] }}
+        {{ dt.day }}{% else %}Unknown date{% endif %}
+
+        ⏰ Tip-off: {% if dt is not none %}{{ dt.strftime('%H:%M') }}{%
+        else %}Unknown{% endif %}
+
+        🏟️ Court: {% if is_home %}🏠 Home{% else %}🚗 Away{% endif
+        %}
+
+        📍 Location: {{ location | title if
+        has_value('sensor.my_team_next_match_location') else 'Not specified'
+        }}
+      data:
+        tag: basketball_match_notif
+        group: basketball_match
+        notification_icon: mdi:basketball
+        channel: Basketball
+        importance: high
+        persistent: true
+        sticky: true
+        clickAction: noAction
+        actions: >-
+          {% set gmaps = state_attr('sensor.my_team_next_match_location',
+          'google_maps_url') | default('', true) %} {% set waze =
+          state_attr('sensor.my_team_next_match_location', 'waze_url') |
+          default('', true) %} {% set waze_clean = waze |
+          replace('https://waze.com', 'https://www.waze.com') | replace('+',
+          '%20') %} {% set buttons = [{'action': 'refresh_match', 'title': '🔄
+          Refresh'}] %} {% if gmaps.startswith('http') %}
+            {% set buttons = buttons + [{'action': 'URI', 'title': '🗺️ Maps', 'uri': gmaps}] %}
+          {% endif %} {% if waze_clean.startswith('http') %}
+            {% set buttons = buttons + [{'action': 'URI', 'title': '🚗 Waze', 'uri': waze_clean}] %}
+          {% endif %} {{ buttons }}
+mode: restart
+max_exceeded: silent
 ```
 
 #### Example: Query next 3 matches in a script
