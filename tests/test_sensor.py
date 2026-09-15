@@ -24,6 +24,8 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -52,6 +54,7 @@ from custom_components.ffbb_tracker.sensor import (
     FFBBNextMatchDateSensor,
     FFBBNextMatchLocationSensor,
     FFBBNextMatchOpponentSensor,
+    FFBBNextMatchVenueTypeSensor,
     FFBBPouleSensor,
     FFBBRankEvolutionExtraData,
     FFBBRankEvolutionSensor,
@@ -211,6 +214,19 @@ def test_next_match_opponent_sensor_none_when_no_upcoming_match(hass):
     assert sensor.native_value is None
 
 
+def test_next_match_opponent_sensor_reports_opponent_name(hass):
+    """native_value must surface the upcoming opponent's name, not just
+    know how to return None -- this is the sensor's actual purpose.
+    """
+    coordinator = _make_coordinator(hass)
+    coordinator.data = _make_team_data(
+        next_match=_make_match(opponent_name="US Mont-de-Marsan")
+    )
+    sensor = FFBBNextMatchOpponentSensor(coordinator)
+
+    assert sensor.native_value == "US Mont-de-Marsan"
+
+
 def test_next_match_opponent_sensor_entity_picture_reflects_logo(hass):
     """entity_picture surfaces the opponent's logo so it renders natively
     (e.g. in the logbook/history), and is None when there's no next match
@@ -224,6 +240,42 @@ def test_next_match_opponent_sensor_entity_picture_reflects_logo(hass):
 
     coordinator.data = _make_team_data(next_match=None)
     assert sensor.entity_picture is None
+
+
+# ---------------------------------------------------------------------------
+# FFBBNextMatchVenueTypeSensor: entirely untested before this -- covers the
+# "home"/"away" state as well as the "no upcoming match" branch.
+# ---------------------------------------------------------------------------
+
+
+def test_next_match_venue_type_sensor_reports_home(hass):
+    """native_value must report 'home' when the next match is_home=True."""
+    coordinator = _make_coordinator(hass)
+    coordinator.data = _make_team_data(next_match=_make_match(is_home=True))
+    sensor = FFBBNextMatchVenueTypeSensor(coordinator)
+
+    assert sensor.native_value == "home"
+    assert sensor.extra_state_attributes["is_home"] is True
+
+
+def test_next_match_venue_type_sensor_reports_away(hass):
+    """native_value must report 'away' when the next match is_home=False."""
+    coordinator = _make_coordinator(hass)
+    coordinator.data = _make_team_data(next_match=_make_match(is_home=False))
+    sensor = FFBBNextMatchVenueTypeSensor(coordinator)
+
+    assert sensor.native_value == "away"
+    assert sensor.extra_state_attributes["is_home"] is False
+
+
+def test_next_match_venue_type_sensor_none_when_no_upcoming_match(hass):
+    """No next match must yield None state and empty attrs, not a crash."""
+    coordinator = _make_coordinator(hass)
+    coordinator.data = _make_team_data(next_match=None)
+    sensor = FFBBNextMatchVenueTypeSensor(coordinator)
+
+    assert sensor.native_value is None
+    assert sensor.extra_state_attributes == {}
 
 
 def test_last_match_date_sensor_reports_played_datetime(hass):
@@ -652,6 +704,113 @@ def test_rank_evolution_resumes_diffing_after_restore(hass, monkeypatch):
     assert sensor.native_value == "+1"  # 5 - 4, preserved from the restored data
 
 
+def test_extra_restore_data_reflects_current_and_previous_position(hass):
+    """extra_restore_data is what HA actually persists to storage on
+    shutdown -- it must reflect the sensor's in-memory positions exactly,
+    or a restart would silently lose or corrupt the evolution baseline.
+    """
+    coordinator = _make_coordinator(hass)
+    sensor = FFBBRankEvolutionSensor(coordinator)
+    sensor._current_position = 3
+    sensor._previous_position = 5
+
+    extra = sensor.extra_restore_data
+
+    assert extra.current_position == 3
+    assert extra.previous_position == 5
+
+
+async def test_async_added_to_hass_restores_positions_from_storage(
+    hass, monkeypatch
+):
+    """With no coordinator data yet, async_added_to_hass must load
+    _current_position/_previous_position straight from the last stored
+    extra data, without attempting to diff against a standing that
+    doesn't exist yet.
+    """
+    coordinator = _make_coordinator(hass)
+    sensor = FFBBRankEvolutionSensor(coordinator)
+    sensor.hass = hass
+    monkeypatch.setattr(
+        "homeassistant.helpers.restore_state.RestoreEntity.async_added_to_hass",
+        AsyncMock(return_value=None),
+    )
+    stored = FFBBRankEvolutionExtraData(current_position=7, previous_position=9)
+    monkeypatch.setattr(
+        sensor,
+        "async_get_last_extra_data",
+        AsyncMock(return_value=SimpleNamespace(as_dict=stored.as_dict)),
+    )
+
+    await sensor.async_added_to_hass()
+
+    assert sensor._current_position == 7
+    assert sensor._previous_position == 9
+
+
+async def test_async_added_to_hass_rediffs_against_restored_baseline(
+    hass, monkeypatch
+):
+    """If the coordinator already has fresher data by the time the entity
+    is added (a real startup race), async_added_to_hass must diff that
+    data against the just-restored baseline immediately, instead of
+    waiting for the next coordinator update to notice the position moved.
+    """
+    coordinator = _make_coordinator(hass)
+    coordinator.data = _make_team_data(
+        team_standing=TeamStanding(
+            position=4, points=8, played=4, won=4, lost=0, raw={}
+        )
+    )
+    sensor = FFBBRankEvolutionSensor(coordinator)
+    sensor.hass = hass
+    monkeypatch.setattr(
+        "homeassistant.helpers.restore_state.RestoreEntity.async_added_to_hass",
+        AsyncMock(return_value=None),
+    )
+    stored = FFBBRankEvolutionExtraData(current_position=6, previous_position=6)
+    monkeypatch.setattr(
+        sensor,
+        "async_get_last_extra_data",
+        AsyncMock(return_value=SimpleNamespace(as_dict=stored.as_dict)),
+    )
+
+    await sensor.async_added_to_hass()
+
+    # Restored baseline was 6; the coordinator now reports position 4, so
+    # this must shift previous_position to the old current (6) and adopt
+    # the new one (4) -- exactly what a coordinator update would do.
+    assert sensor._previous_position == 6
+    assert sensor._current_position == 4
+
+
+async def test_async_added_to_hass_without_prior_restore_data(hass, monkeypatch):
+    """A brand-new entity (nothing in storage yet, e.g. first-ever startup)
+    must not crash on async_get_last_extra_data() returning None, and must
+    still establish a baseline from the coordinator's current data.
+    """
+    coordinator = _make_coordinator(hass)
+    coordinator.data = _make_team_data(
+        team_standing=TeamStanding(
+            position=2, points=8, played=4, won=4, lost=0, raw={}
+        )
+    )
+    sensor = FFBBRankEvolutionSensor(coordinator)
+    sensor.hass = hass
+    monkeypatch.setattr(
+        "homeassistant.helpers.restore_state.RestoreEntity.async_added_to_hass",
+        AsyncMock(return_value=None),
+    )
+    monkeypatch.setattr(
+        sensor, "async_get_last_extra_data", AsyncMock(return_value=None)
+    )
+
+    await sensor.async_added_to_hass()
+
+    assert sensor._current_position == 2
+    assert sensor._previous_position == 2
+
+
 def _icon_for_range(ranges: dict[str, str], default: str, value: float) -> str:
     """Replicate HA's range-icon algorithm: highest range key <= value."""
     candidates = [
@@ -729,6 +888,17 @@ def test_rank_sensor_none_when_no_standing(hass):
     assert sensor.native_value is None
 
 
+def test_rank_sensor_attrs_empty_before_first_refresh(hass):
+    """Before the coordinator's first successful refresh, .data is None --
+    extra_state_attributes must return {} rather than raising on
+    self.coordinator.data.poule_name.
+    """
+    coordinator = _make_coordinator(hass)
+    sensor = FFBBRankSensor(coordinator)
+
+    assert sensor.extra_state_attributes == {}
+
+
 # ---------------------------------------------------------------------------
 # _get_form_letters
 # ---------------------------------------------------------------------------
@@ -778,6 +948,18 @@ def test_form_sensor_none_when_no_played_matches(hass):
         fixtures=[_make_match(match_id="m1", is_played=False, result=None)]
     )
 
+    sensor = FFBBFormSensor(coordinator)
+
+    assert sensor.native_value is None
+    assert sensor.extra_state_attributes == {}
+
+
+def test_form_sensor_none_before_first_refresh(hass):
+    """Before the coordinator's first successful refresh, .data is None --
+    _recent_played_matches must return [] rather than raising on
+    self.coordinator.data.fixtures.
+    """
+    coordinator = _make_coordinator(hass)
     sensor = FFBBFormSensor(coordinator)
 
     assert sensor.native_value is None
