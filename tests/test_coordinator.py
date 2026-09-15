@@ -85,9 +85,7 @@ def _make_coordinator_with_client(hass, base_url: str) -> FFBBDataUpdateCoordina
         },
     )
     entry.add_to_hass(hass)
-    return FFBBDataUpdateCoordinator(
-        hass, client=_StubClient(base_url), entry=entry
-    )
+    return FFBBDataUpdateCoordinator(hass, client=_StubClient(base_url), entry=entry)
 
 
 def test_filters_out_matches_from_other_engagements(hass, sample_poule_data):
