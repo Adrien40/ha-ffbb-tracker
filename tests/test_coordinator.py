@@ -196,8 +196,7 @@ def test_logo_urls_built_from_client_base_url(hass, sample_poule_data):
     # match-1: engagement-123 is équipe1 (home) -> team=org-1, opponent=org-2
     last = result.last_match
     assert last.team_logo_url == (
-        "https://api.ffbb.app/assets/team-logo-uuid"
-        "?height=220&fit=contain&format=avif"
+        "https://api.ffbb.app/assets/team-logo-uuid?height=220&fit=contain&format=avif"
     )
     assert last.opponent_logo_url == (
         "https://api.ffbb.app/assets/opponent-logo-uuid"
@@ -208,8 +207,7 @@ def test_logo_urls_built_from_client_base_url(hass, sample_poule_data):
     # regardless of which side of the fixture it's listed on.
     nxt = result.next_match
     assert nxt.team_logo_url == (
-        "https://api.ffbb.app/assets/team-logo-uuid"
-        "?height=220&fit=contain&format=avif"
+        "https://api.ffbb.app/assets/team-logo-uuid?height=220&fit=contain&format=avif"
     )
 
 
@@ -628,11 +626,21 @@ async def test_poule_cache_independent_per_poule(hass):
 
     coordinator_a.client = AsyncMock()
     coordinator_a.client.get_poule_data = AsyncMock(
-        return_value={"id": "poule-1", "nom": "A", "rencontres": [], "classements": []}
+        return_value={
+            "id": "poule-1",
+            "nom": "A",
+            "rencontres": [],
+            "classements": [],
+        }
     )
     coordinator_b.client = AsyncMock()
     coordinator_b.client.get_poule_data = AsyncMock(
-        return_value={"id": "poule-2", "nom": "B", "rencontres": [], "classements": []}
+        return_value={
+            "id": "poule-2",
+            "nom": "B",
+            "rencontres": [],
+            "classements": [],
+        }
     )
 
     data_a = await coordinator_a._async_fetch_poule_data()
