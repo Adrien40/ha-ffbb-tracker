@@ -166,12 +166,11 @@
   "issues": {
     "season_rollover": {
       "title": "FFBB Tracker : Équipe introuvable",
-      "description": "L'équipe « {team_name} » est introuvable sur l'API FFBB depuis plusieurs jours. Cela arrive généralement en début de nouvelle saison, quand la FFBB réattribue les identifiants d'engagement/poule. Cliquez sur « Envoyer » ci-dessous pour rouvrir la recherche d'équipe et la retrouver.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Rechercher « {team_name} » à nouveau",
-            "description": "Cela ouvrira la recherche d'équipe pour retrouver « {team_name} » sous ses nouveaux identifiants d'engagement et de poule pour cette saison."
+            "description": "L'équipe « {team_name} » est introuvable sur l'API FFBB depuis plusieurs jours. Cela arrive généralement en début de nouvelle saison, quand la FFBB réattribue les identifiants d'engagement/poule. Cela ouvrira la recherche d'équipe pour retrouver « {team_name} » sous ses nouveaux identifiants d'engagement et de poule pour cette saison."
           }
         }
       }
