@@ -720,9 +720,7 @@ def test_extra_restore_data_reflects_current_and_previous_position(hass):
     assert extra.previous_position == 5
 
 
-async def test_async_added_to_hass_restores_positions_from_storage(
-    hass, monkeypatch
-):
+async def test_async_added_to_hass_restores_positions_from_storage(hass, monkeypatch):
     """With no coordinator data yet, async_added_to_hass must load
     _current_position/_previous_position straight from the last stored
     extra data, without attempting to diff against a standing that
@@ -748,9 +746,7 @@ async def test_async_added_to_hass_restores_positions_from_storage(
     assert sensor._previous_position == 9
 
 
-async def test_async_added_to_hass_rediffs_against_restored_baseline(
-    hass, monkeypatch
-):
+async def test_async_added_to_hass_rediffs_against_restored_baseline(hass, monkeypatch):
     """If the coordinator already has fresher data by the time the entity
     is added (a real startup race), async_added_to_hass must diff that
     data against the just-restored baseline immediately, instead of
