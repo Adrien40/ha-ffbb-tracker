@@ -166,7 +166,19 @@
   "issues": {
     "season_rollover": {
       "title": "FFBB Tracker : Équipe introuvable",
-      "description": "L'équipe « {team_name} » est introuvable sur l'API FFBB depuis plusieurs jours. Cela arrive généralement en début de nouvelle saison, quand la FFBB réattribue les identifiants d'engagement/poule. Rendez-vous dans Paramètres > Appareils et services > FFBB Tracker, ouvrez cette entrée, puis choisissez Reconfigurer pour rechercher à nouveau votre équipe."
+      "description": "L'équipe « {team_name} » est introuvable sur l'API FFBB depuis plusieurs jours. Cela arrive généralement en début de nouvelle saison, quand la FFBB réattribue les identifiants d'engagement/poule. Cliquez sur « Envoyer » ci-dessous pour rouvrir la recherche d'équipe et la retrouver.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Rechercher « {team_name} » à nouveau",
+            "description": "Cela ouvrira la recherche d'équipe pour retrouver « {team_name} » sous ses nouveaux identifiants d'engagement et de poule pour cette saison."
+          }
+        }
+      }
+    },
+    "token_refresh_failing": {
+      "title": "FFBB Tracker : Échec du renouvellement du jeton public",
+      "description": "Les mises à jour pour « {team_name} » continuent de fonctionner grâce à un jeton de secours, mais le renouvellement automatique du jeton public de l'API FFBB a échoué plusieurs fois de suite. Cela peut signifier que la FFBB a modifié son API `competitions.ffbb.com` et que cette intégration devra être mise à jour. Vérifiez qu'une nouvelle version n'est pas disponible, ou ouvrez une issue sur GitHub si le problème persiste."
     }
   },
   "exceptions": {

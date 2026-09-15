@@ -166,7 +166,19 @@
   "issues": {
     "season_rollover": {
       "title": "FFBB Tracker: Team not found",
-      "description": "The team \"{team_name}\" has been unavailable on the FFBB API for several days. This typically occurs during season rollovers when the FFBB assigns new engagement and pool IDs. Go to Settings > Devices & services > FFBB Tracker, select this entry, and choose Reconfigure to locate your team again."
+      "description": "The team \"{team_name}\" has been unavailable on the FFBB API for several days. This typically occurs during season rollovers when the FFBB assigns new engagement and pool IDs. Click \"Submit\" below to reopen the team search and locate it again.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Search for \"{team_name}\" again",
+            "description": "This will open the team search so you can find \"{team_name}\" under its new engagement and pool IDs for this season."
+          }
+        }
+      }
+    },
+    "token_refresh_failing": {
+      "title": "FFBB Tracker: Public token refresh failing",
+      "description": "Updates for \"{team_name}\" are still working thanks to a fallback token, but the automatic refresh of the FFBB public API token has failed several times in a row. This may mean the FFBB has changed its `competitions.ffbb.com` API and this integration will need an update. Consider checking for a newer release, or opening an issue on GitHub if this persists."
     }
   },
   "exceptions": {

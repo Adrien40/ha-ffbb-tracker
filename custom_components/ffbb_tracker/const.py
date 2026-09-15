@@ -58,6 +58,12 @@ CONF_SCAN_INTERVAL: Final = "scan_interval"
 # FFBBDataUpdateCoordinator._handle_not_found in coordinator.py.
 SEASON_ROLLOVER_THRESHOLD_DAYS: Final = 3
 
+# Number of consecutive failed dynamic token refreshes (see
+# FFBBClient.token_refresh_failures) after which the coordinator raises a
+# repair issue warning that the integration may be running on a stale
+# fallback token.
+TOKEN_REFRESH_FAILURE_THRESHOLD: Final = 3
+
 # Attributes and keys
 ATTR_OPPONENT: Final = "opponent"
 ATTR_MATCH_DATE: Final = "match_date"
@@ -77,3 +83,4 @@ ATTR_ROUND: Final = "round"
 ATTR_POINT_DIFFERENCE: Final = "point_difference"
 ATTR_TEAM_LOGO_URL: Final = "team_logo_url"
 ATTR_OPPONENT_LOGO_URL: Final = "opponent_logo_url"
+ATTR_IS_STALE: Final = "is_stale"

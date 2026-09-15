@@ -82,6 +82,25 @@ class FFBBClient:
         self._rate_limiter = rate_limiter
         self._token: str = DEFAULT_DIRECTUS_TOKEN
         self._auth_lock = asyncio.Lock()
+        self._token_refresh_failures: int = 0
+        # Poule IDs already warned about hitting a pagination limit, so the
+        # warning fires once per outage instead of on every successful poll
+        # while a poule stays above the limit (discarded once it drops
+        # back below, so a later re-occurrence warns again).
+        self._warned_rencontres_limit: set[str] = set()
+        self._warned_classements_limit: set[str] = set()
+
+    @property
+    def token_refresh_failures(self) -> int:
+        """Return the number of consecutive failed dynamic token refreshes.
+
+        Reset to 0 as soon as `/items/configuration` is reachable and
+        returns a usable token again. Used by the coordinator to raise a
+        repair issue if the integration has been silently running on the
+        hardcoded DEFAULT_DIRECTUS_TOKEN fallback for too long -- which
+        would otherwise only surface as a `_LOGGER.warning` on refresh.
+        """
+        return self._token_refresh_failures
 
     @property
     def base_url(self) -> str:
@@ -106,6 +125,7 @@ class FFBBClient:
                         or data.get("key_dh")
                         or DEFAULT_DIRECTUS_TOKEN
                     )
+                    self._token_refresh_failures = 0
             except (
                 FFBBApiError,
                 aiohttp.ClientError,
@@ -121,6 +141,7 @@ class FFBBClient:
                 # to be the best-effort refresh it's meant to be. The raw
                 # exception types are kept too, in case _request's own
                 # wrapping is ever bypassed or extended.
+                self._token_refresh_failures += 1
                 _LOGGER.warning("Could not refresh token dynamically: %s", err)
 
     async def _request(
@@ -272,23 +293,31 @@ class FFBBClient:
 
         rencontres = data.get("rencontres")
         if isinstance(rencontres, list) and len(rencontres) >= self._RENCONTRES_LIMIT:
-            _LOGGER.warning(
-                "Fixture list for pool %s hit the API limit (%d); some "
-                "matches may be missing from this response",
-                poule_id,
-                self._RENCONTRES_LIMIT,
-            )
+            if poule_id not in self._warned_rencontres_limit:
+                _LOGGER.warning(
+                    "Fixture list for pool %s hit the API limit (%d); some "
+                    "matches may be missing from this response",
+                    poule_id,
+                    self._RENCONTRES_LIMIT,
+                )
+                self._warned_rencontres_limit.add(poule_id)
+        else:
+            self._warned_rencontres_limit.discard(poule_id)
 
         classements = data.get("classements")
         if (
             isinstance(classements, list)
             and len(classements) >= self._CLASSEMENTS_LIMIT
         ):
-            _LOGGER.warning(
-                "Standings for pool %s hit the API limit (%d); some teams "
-                "may be missing from this response",
-                poule_id,
-                self._CLASSEMENTS_LIMIT,
-            )
+            if poule_id not in self._warned_classements_limit:
+                _LOGGER.warning(
+                    "Standings for pool %s hit the API limit (%d); some teams "
+                    "may be missing from this response",
+                    poule_id,
+                    self._CLASSEMENTS_LIMIT,
+                )
+                self._warned_classements_limit.add(poule_id)
+        else:
+            self._warned_classements_limit.discard(poule_id)
 
         return data

@@ -26,6 +26,7 @@ from .const import (
     ATTR_GYM_CITY,
     ATTR_GYM_NAME,
     ATTR_IS_HOME,
+    ATTR_IS_STALE,
     ATTR_MATCH_DATE,
     ATTR_NAVIGATION_URL,
     ATTR_OPPONENT_LOGO_URL,
@@ -148,6 +149,7 @@ class FFBBNextMatchDateSensor(FFBBSensorBase):
             ATTR_GYM_NAME: match.gym_name,
             ATTR_GYM_ADDRESS: match.gym_address,
             ATTR_GYM_CITY: match.gym_city,
+            ATTR_IS_STALE: match.is_stale,
         }
 
 
@@ -193,6 +195,7 @@ class FFBBNextMatchOpponentSensor(FFBBSensorBase):
             ATTR_WAZE_URL: None,
             ATTR_TEAM_LOGO_URL: match.team_logo_url,
             ATTR_OPPONENT_LOGO_URL: match.opponent_logo_url,
+            ATTR_IS_STALE: match.is_stale,
         }
 
         if match.formatted_address:
@@ -237,6 +240,7 @@ class FFBBNextMatchVenueTypeSensor(FFBBSensorBase):
             ATTR_GYM_CITY: match.gym_city,
             ATTR_TEAM_LOGO_URL: match.team_logo_url,
             ATTR_OPPONENT_LOGO_URL: match.opponent_logo_url,
+            ATTR_IS_STALE: match.is_stale,
         }
 
 
@@ -275,6 +279,7 @@ class FFBBNextMatchLocationSensor(FFBBSensorBase):
             ATTR_WAZE_URL: None,
             ATTR_TEAM_LOGO_URL: match.team_logo_url,
             ATTR_OPPONENT_LOGO_URL: match.opponent_logo_url,
+            ATTR_IS_STALE: match.is_stale,
         }
 
         if match.formatted_address:

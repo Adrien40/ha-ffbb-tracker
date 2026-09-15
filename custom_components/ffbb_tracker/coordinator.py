@@ -33,6 +33,7 @@ from .const import (
     LOGO_ASSET_FORMAT,
     LOGO_ASSET_HEIGHT,
     SEASON_ROLLOVER_THRESHOLD_DAYS,
+    TOKEN_REFRESH_FAILURE_THRESHOLD,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -116,6 +117,7 @@ class MatchDetails:
     team_logo_url: str | None
     opponent_logo_url: str | None
     raw: dict[str, Any]
+    is_stale: bool = False
 
     @property
     def formatted_address(self) -> str | None:
@@ -220,9 +222,35 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             raise UpdateFailed(f"Error communicating with FFBB API: {err}") from err
 
         self._clear_not_found_issue()
+        self._check_token_refresh_health()
         processed = self._process_poule_data(poule_data)
         self.update_interval = self._compute_update_interval(processed)
         return processed
+
+    def _check_token_refresh_health(self) -> None:
+        """Raise or clear a repair issue for a persistently failing token refresh.
+
+        The public DEFAULT_DIRECTUS_TOKEN fallback (see const.py) keeps
+        polling working even while the dynamic `/items/configuration`
+        refresh is failing, so a real problem there (the FFBB API changed
+        that endpoint's shape, for example) would otherwise only ever
+        surface as a `_LOGGER.warning` on the client -- easy to miss.
+        Surfacing it as a repair issue after a few consecutive failures
+        makes it visible in the UI instead.
+        """
+        issue_id = f"token_refresh_failing_{self.engagement_id}"
+        if self.client.token_refresh_failures >= TOKEN_REFRESH_FAILURE_THRESHOLD:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="token_refresh_failing",
+                translation_placeholders={"team_name": self.team_name},
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
 
     def _handle_not_found(self) -> None:
         """Track a 404 from the FFBB API and raise a repair issue once it
@@ -250,10 +278,11 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
                 self.hass,
                 DOMAIN,
                 f"season_rollover_{self.engagement_id}",
-                is_fixable=False,
+                is_fixable=True,
                 severity=ir.IssueSeverity.WARNING,
                 translation_key="season_rollover",
                 translation_placeholders={"team_name": self.team_name},
+                data={"entry_id": self.config_entry.entry_id},
             )
 
     def _clear_not_found_issue(self) -> None:
@@ -426,6 +455,8 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             next_match = next(
                 (match for match in team_matches if not match.is_played), None
             )
+            if next_match is not None:
+                next_match.is_stale = True
 
         team_standing: TeamStanding | None = None
         parsed_standings: list[dict[str, Any]] = []
