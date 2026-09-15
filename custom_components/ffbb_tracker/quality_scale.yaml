@@ -119,10 +119,12 @@ rules:
       as FFBBApiError. Covered by test_request_wraps_malformed_json_as_api_error
       and test_request_rejects_non_dict_payload in test_api.py.
       Unrelated to this rule but found alongside it: api.py's two
-      pagination-limit warnings (_RENCONTRES_LIMIT/_CLASSEMENTS_LIMIT) log
-      on every successful poll for a pool that stays above the limit, not
-      just once -- worth a look separately if it turns out noisy in
-      practice.
+      pagination-limit warnings (_RENCONTRES_LIMIT/_CLASSEMENTS_LIMIT) used
+      to log on every successful poll for a pool that stays above the
+      limit, not just once -- fixed via _warned_rencontres_limit/
+      _warned_classements_limit sets on FFBBClient, keyed by poule_id, so
+      each warning fires once per outage and re-arms if the pool drops
+      back below the limit and exceeds it again later.
   parallel-updates:
     status: done
     comment: PARALLEL_UPDATES = 0 set in sensor.py, button.py, calendar.py, and binary_sensor.py (coordinator does the single shared poll).
@@ -269,10 +271,15 @@ rules:
     status: done
     comment: >
       A FFBBNotFoundError persisting SEASON_ROLLOVER_THRESHOLD_DAYS (3 days)
-      raises a season_rollover issue pointing the user to Reconfigure; it's
-      cleared automatically on the next successful refresh. Not yet wired
-      to a guided one-click repairs.py fix flow (is_fixable=False for now),
-      just a clear description of the manual step.
+      raises a season_rollover issue (is_fixable=True); repairs.py wires a
+      one-click fix flow that hands off straight into async_step_reconfigure
+      for the affected entry, cleared automatically on the next successful
+      refresh. A second issue, token_refresh_failing, is raised
+      (is_fixable=False, no code-level fix exists) after
+      TOKEN_REFRESH_FAILURE_THRESHOLD consecutive failures of the dynamic
+      Directus token refresh -- surfacing what would otherwise only be a
+      _LOGGER.warning on the client -- and clears on the next successful
+      refresh.
   stale-devices:
     status: exempt
     comment: One device per config entry; the device is removed with the entry, nothing goes stale independently.
