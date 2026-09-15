@@ -4,6 +4,11 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/v/release/Adrien40/ha-ffbb-tracker)](https://github.com/Adrien40/ha-ffbb-tracker/releases)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Tests](https://img.shields.io/github/actions/workflow/status/Adrien40/ha-ffbb-tracker/tests.yml?branch=main&label=tests)](https://github.com/Adrien40/ha-ffbb-tracker/actions/workflows/tests.yml)
+[![Validate](https://img.shields.io/github/actions/workflow/status/Adrien40/ha-ffbb-tracker/validate.yml?branch=main&label=hassfest%2Fhacs)](https://github.com/Adrien40/ha-ffbb-tracker/actions/workflows/validate.yml)
+[![Linting](https://img.shields.io/github/actions/workflow/status/Adrien40/ha-ffbb-tracker/lint.yml?branch=main&label=lint)](https://github.com/Adrien40/ha-ffbb-tracker/actions/workflows/lint.yml)
+[![CodeQL](https://img.shields.io/github/actions/workflow/status/Adrien40/ha-ffbb-tracker/codeql.yml?branch=main&label=codeql)](https://github.com/Adrien40/ha-ffbb-tracker/actions/workflows/codeql.yml)
+[![Quality Scale](https://img.shields.io/badge/HA%20Quality%20Scale-Platinum-9c27b0)](custom_components/ffbb_tracker/quality_scale.yaml)
 
 A **comprehensive Home Assistant integration** to track match results, schedules, and standings for basketball teams competing in FFBB (French Basketball Federation) championships, with no user account or private API key required. 🛡️
 
