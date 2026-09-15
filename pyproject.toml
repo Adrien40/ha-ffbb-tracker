@@ -1,5 +1,5 @@
 [tool.ruff]
-target-version = "py313"
+target-version = "py314"
 line-length = 88
 
 [tool.ruff.lint]
@@ -29,7 +29,7 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.14"
 warn_unused_ignores = true
 warn_redundant_casts = true
 warn_unused_configs = true
