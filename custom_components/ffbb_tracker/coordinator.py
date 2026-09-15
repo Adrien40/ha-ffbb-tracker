@@ -239,7 +239,14 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
         makes it visible in the UI instead.
         """
         issue_id = f"token_refresh_failing_{self.engagement_id}"
-        if self.client.token_refresh_failures >= TOKEN_REFRESH_FAILURE_THRESHOLD:
+        # In tests, `self.client` is commonly swapped for a bare AsyncMock()
+        # without this attribute set, which would return a Mock rather
+        # than an int here -- guard against that instead of assuming a
+        # real FFBBClient.
+        failures = getattr(self.client, "token_refresh_failures", 0)
+        if not isinstance(failures, int):
+            failures = 0
+        if failures >= TOKEN_REFRESH_FAILURE_THRESHOLD:
             ir.async_create_issue(
                 self.hass,
                 DOMAIN,
