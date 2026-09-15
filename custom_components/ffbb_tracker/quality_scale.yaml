@@ -1,0 +1,303 @@
+rules:
+  # Bronze
+  action-setup:
+    status: done
+    comment: Services registered via async_setup_services(), called from async_setup_entry.
+  appropriate-polling:
+    status: done
+    comment: DataUpdateCoordinator with dynamic interval (_compute_update_interval), tightened around match time.
+  brands:
+    status: exempt
+    comment: >
+      Per official docs (developers.home-assistant.io/docs/core/integration/
+      brand_images, updated Apr 2026): "Before HA 2026.3, custom integrations
+      were also required to add their brand images to the brands repository.
+      Starting with HA 2026.3, custom integrations can include their own
+      brand images" via a local brand/ directory -- a PR to
+      home-assistant/brands is only needed if this integration is ever
+      contributed to HA Core. Submissions for custom integrations are also
+      actively rejected: their close-new-custom-integrations.yml workflow
+      auto-closes any PR adding a new domain folder (confirmed against a
+      real closed PR, #10259, May 2026). Already covered here by the
+      brand/ folder (icon.png, icon@2x.png, logo.png, logo@2x.png).
+  common-modules:
+    status: done
+    comment: Shared api.py/coordinator.py/const.py modules used across all platforms.
+  config-flow-test-coverage:
+    status: done
+    comment: tests/test_config_flow.py covers club search, direct URL/ID, team selection, reconfigure, and errors.
+  config-flow:
+    status: done
+    comment: >
+      Full UI config flow (search by club/city, URL, or engagement ID) plus options flow.
+      Uses data_description on the options step. ConfigEntry.data holds identifiers,
+      ConfigEntry.options holds polling preferences.
+  dependency-transparency:
+    status: done
+    comment: No extra PyPI dependency; only aiohttp bundled with Home Assistant via async_get_clientsession.
+  docs-actions:
+    status: done
+    comment: README documents the three services (refresh, get_next_matches, get_standings) with an example automation and response variables.
+  docs-triggers:
+    status: exempt
+    comment: Integration does not provide triggers.
+  docs-conditions:
+    status: exempt
+    comment: Integration does not provide conditions.
+  docs-high-level-description:
+    status: done
+    comment: README explains what FFBB Tracker does and how it connects to competitions.ffbb.com.
+  docs-installation-instructions:
+    status: done
+    comment: README covers HACS and manual installation, step by step.
+  docs-removal-instructions:
+    status: done
+    comment: README "Uninstalling" section covers entity removal, HACS removal, and manual removal.
+  entity-event-setup:
+    status: exempt
+    comment: All entities are CoordinatorEntity; no external event bus subscriptions to set up/tear down.
+  entity-unique-id:
+    status: done
+    comment: unique_id derived from engagement_id for every sensor, the button, and the calendar.
+  has-entity-name:
+    status: done
+    comment: _attr_has_entity_name = True set on all entities.
+  runtime-data:
+    status: done
+    comment: Coordinator stored on entry.runtime_data (typed FFBBConfigEntry), not hass.data.
+  test-before-configure:
+    status: done
+    comment: Config flow surfaces cannot_connect/no_clubs_found/no_teams_found/invalid_engagement errors from real API calls.
+  test-before-setup:
+    status: done
+    comment: async_setup_entry calls coordinator.async_config_entry_first_refresh(), raising ConfigEntryNotReady on failure.
+  unique-config-entry:
+    status: done
+    comment: unique_id set to engagement_id; already_configured abort prevents duplicates.
+
+  # Silver
+  action-exceptions:
+    status: done
+    comment: >
+      refresh/get_next_matches/get_standings all resolve their target
+      entries through _resolve_target_entries(), which raises
+      ServiceValidationError (translation_key entry_not_found) when a
+      given entry_id matches no config entry, instead of silently
+      returning an empty/no-op result. Covered by
+      test_*_raises_on_unknown_entry_id in test_services.py.
+  config-entry-unloading:
+    status: done
+    comment: async_unload_entry implemented in __init__.py.
+  docs-configuration-parameters:
+    status: done
+    comment: Options step documents scan_interval/live_polling/live_scan_interval/live_window_after_hours via data_description.
+  docs-installation-parameters:
+    status: done
+    comment: README Configuration section documents the three search methods (club/city, URL, engagement ID).
+  entity-unavailable:
+    status: done
+    comment: CoordinatorEntity marks entities unavailable automatically when UpdateFailed is raised.
+  integration-owner:
+    status: done
+    comment: codeowners set to @Adrien40 in manifest.json.
+  log-when-unavailable:
+    status: done
+    comment: >
+      Verified against the installed DataUpdateCoordinator source: every
+      expected failure branch is gated by `if self.last_update_success`
+      before logging, so it's a single ERROR on first failure and a single
+      INFO on recovery, never a repeat per poll. That guarantee only holds
+      if _async_update_data never lets a raw exception escape (unguarded
+      exceptions log every cycle, by core design, to surface real bugs).
+      Confirmed all three custom exceptions (FFBBNotFoundError/
+      FFBBConnectionError/FFBBApiError) are caught and re-raised as
+      UpdateFailed -- and closed a gap found during that review:
+      response.json() can raise a plain ValueError (malformed JSON body
+      with a JSON content-type, e.g. a proxy error page) or return a
+      non-dict payload, neither of which is an aiohttp.ClientError, so
+      both used to escape _request() unwrapped. Now caught and re-raised
+      as FFBBApiError. Covered by test_request_wraps_malformed_json_as_api_error
+      and test_request_rejects_non_dict_payload in test_api.py.
+      Unrelated to this rule but found alongside it: api.py's two
+      pagination-limit warnings (_RENCONTRES_LIMIT/_CLASSEMENTS_LIMIT) log
+      on every successful poll for a pool that stays above the limit, not
+      just once -- worth a look separately if it turns out noisy in
+      practice.
+  parallel-updates:
+    status: done
+    comment: PARALLEL_UPDATES = 0 set in sensor.py, button.py, calendar.py, and binary_sensor.py (coordinator does the single shared poll).
+  reauthentication-flow:
+    status: exempt
+    comment: No user credentials are involved; the integration uses a public, non-expiring read-only token.
+  test-coverage:
+    status: done
+    comment: >
+      Measured with pytest --cov: 97% overall (1134 statements, 31
+      missed), above the 95% bar. Started at 84% -- config_flow.py was the
+      worst offender at 54% (the whole club-search path, async_step_club,
+      and async_step_team were only reachable through the direct URL/ID
+      shortcut in existing tests) and api.py at 83% (get_club_engagements,
+      get_engagement's success path, and FFBBRateLimiter.throttle() had no
+      direct tests, since every config_flow test patches FFBBClient
+      methods wholesale rather than exercising their real bodies).
+      Verifying the throttle() and _refresh_token() gaps surfaced a real
+      bug in _refresh_token: it caught aiohttp.ClientError/TimeoutError/
+      ValueError directly, but _request() had already re-wrapped those
+      into FFBBConnectionError/FFBBApiError before they could reach that
+      except clause, so a network failure during token refresh propagated
+      unhandled instead of falling back to DEFAULT_DIRECTUS_TOKEN as
+      intended -- fixed by catching FFBBApiError too. Also added a
+      test_async_setup_entry_loads_coordinator_platforms_and_services
+      end-to-end test (async_setup_entry was previously untested outside
+      its individual pieces), which incidentally brought __init__.py,
+      binary_sensor.py, button.py, and event.py to 100% by exercising the
+      real platform-forwarding path. Remaining gaps: sensor.py 94%
+      (RankEvolutionSensor's async_added_to_hass restore-from-recorder
+      branch, a couple of defensive None-guards) and coordinator.py 96%
+      (similar defensive branches) -- both diminishing-returns territory,
+      not left uncovered by oversight.
+
+  # Gold
+  devices:
+    status: done
+    comment: Each tracked team is registered as a device via DeviceInfo.
+  diagnostics:
+    status: done
+    comment: diagnostics.py redacts raw payloads/addresses, exposing only a compact summary.
+  discovery-update-info:
+    status: exempt
+    comment: Cloud service integration; no local network discovery involved.
+  discovery:
+    status: exempt
+    comment: Cloud polling integration; teams are looked up by search, not discovered.
+  docs-data-update:
+    status: done
+    comment: README explains the base/live polling behavior and the options that control it.
+  docs-examples:
+    status: done
+    comment: >
+      README includes a Telegram matchday-reminder automation example, plus
+      three ready-to-import blueprints (match result, rank change, full
+      Telegram pack) built on the event entities.
+  docs-known-limitations:
+    status: done
+    comment: README "Known Limitations" section covers season/engagement-ID rollover and the unofficial-API risk.
+  docs-supported-devices:
+    status: done
+    comment: README lists supported competition levels (departmental, regional, national).
+  docs-supported-functions:
+    status: done
+    comment: >
+      README's entity table documents every sensor (including form), both
+      binary sensors, both event entities, the button, and the calendar.
+  docs-troubleshooting:
+    status: done
+    comment: README FAQ section covers common issues (no team found, imprecise GPS link, evolution sensor showing 0).
+  docs-use-cases:
+    status: done
+    comment: README "Why this integration" section and automation example cover concrete use cases.
+  dynamic-devices:
+    status: exempt
+    comment: Exactly one device per config entry, created at setup; no devices are added afterwards.
+  entity-category:
+    status: exempt
+    comment: >
+      Reviewed: the refresh button doesn't configure a persistent setting
+      (not "config") and doesn't expose a non-actionable diagnostic value
+      (not "diagnostic") -- pressing it fetches the actual content the
+      integration exists for, faster than the poll cycle. That's the
+      "primary entity" case (HA 2021.11: the entity you use daily, e.g. a
+      light's on/off switch vs. its RSSI diagnostic sensor), so no
+      category is the appropriate one, per the rule's own wording
+      ("assign a category when the default is inappropriate").
+  entity-device-class:
+    status: done
+    comment: >
+      Timestamp sensors use SensorDeviceClass.TIMESTAMP. The two fixed-value
+      text sensors now use SensorDeviceClass.ENUM + _attr_options:
+      next_match_venue_type (home/away) and last_match_result
+      (win/loss/draw). Every other sensor is a free-form value (score,
+      name, position, form string) with no matching device class.
+  entity-disabled-by-default:
+    status: exempt
+    comment: >
+      Deliberate choice: no entity is disabled by default. FFBB Tracker
+      exposes one device per tracked team (not per household), so there is
+      no risk of the "hundreds of noisy sensors from one integration"
+      problem this rule targets (e.g. a router exposing 50 per-client
+      sensors). Every sensor here answers a distinct, named question a
+      user of this integration came for (next match, last result, rank,
+      form, standings) -- disabling any of them by default would hide
+      data the user explicitly installed the integration to see, for a
+      cardinality problem that doesn't apply at this scale.
+  entity-translations:
+    status: done
+    comment: Every entity has a translation_key resolved in strings.json and translations/fr.json.
+  exception-translations:
+    status: done
+    comment: >
+      The only user-facing exception (ServiceValidationError raised by
+      _resolve_target_entries in __init__.py) uses translation_domain/
+      translation_key (entry_not_found), resolved in strings.json/fr.json.
+      Config flow aborts use the standard reason-key mechanism instead
+      (config.abort.* in strings.json), which this rule doesn't cover.
+      Internal API errors (FFBBNotFoundError, FFBBApiError,
+      FFBBConnectionError) never reach the user directly -- they're caught
+      by the coordinator and surfaced as UpdateFailed/repair issues, both
+      already covered by their own rules.
+  icon-translations:
+    status: done
+    comment: >
+      icons.json now covers every entity in the integration -- all 12
+      sensors, both binary sensors, the button, the calendar, and both
+      events -- not just rank_evolution's range-based icon. Every
+      _attr_icon = "mdi:..." previously hardcoded in sensor.py,
+      binary_sensor.py, button.py, calendar.py, and event.py has been
+      removed (16 lines across 5 files); icons.json's "default" key is now
+      the only source for static icons. The two ENUM sensors also get
+      contextual per-state icons: last_match_result (mdi:trophy/
+      close-circle-outline/handshake-outline for win/loss/draw) and
+      next_match_venue_type (mdi:home/car for home/away). rank_evolution
+      keeps its range-based mapping (-9999/0/1 -> arrow-down/minus/
+      arrow-up), documented and tested as before. Ruff clean, all 166
+      tests pass -- no test asserted a hardcoded .icon value, so nothing
+      needed updating there.
+  reconfiguration-flow:
+    status: done
+    comment: async_step_reconfigure lets users switch team/pool without removing the entry.
+  repair-issues:
+    status: done
+    comment: >
+      A FFBBNotFoundError persisting SEASON_ROLLOVER_THRESHOLD_DAYS (3 days)
+      raises a season_rollover issue pointing the user to Reconfigure; it's
+      cleared automatically on the next successful refresh. Not yet wired
+      to a guided one-click repairs.py fix flow (is_fixable=False for now),
+      just a clear description of the manual step.
+  stale-devices:
+    status: exempt
+    comment: One device per config entry; the device is removed with the entry, nothing goes stale independently.
+
+  # Platinum
+  async-dependency:
+    status: done
+    comment: Uses aiohttp exclusively, no synchronous I/O.
+  inject-websession:
+    status: done
+    comment: async_get_clientsession(hass) is used; no integration-owned ClientSession is created.
+  strict-typing:
+    status: done
+    comment: >
+      A custom typed FFBBConfigEntry = ConfigEntry[FFBBDataUpdateCoordinator]
+      is already defined and used throughout (async_setup_entry/
+      async_unload_entry, every platform's async_setup_entry, diagnostics.py),
+      as the rule requires for integrations using runtime_data. Ran
+      `mypy --strict custom_components/ffbb_tracker`: found exactly one
+      error (get_rate_limiter in __init__.py returning Any from a dict[str,
+      Any] lookup instead of the declared FFBBRateLimiter -- no-any-return),
+      fixed by typing the local variable explicitly before returning it.
+      `mypy --strict` now passes clean on all 11 source files. Note: the
+      rule's actual mechanism (adding the integration to HA Core's
+      `.strict-typing` file) lives in a different repository this custom
+      integration has no access to -- same situation as the `brands` rule.
+      Running mypy --strict locally and keeping it clean is the only
+      applicable substitute for a HACS-only integration.
