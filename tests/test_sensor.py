@@ -745,6 +745,12 @@ async def test_async_added_to_hass_restores_positions_from_storage(hass, monkeyp
     assert sensor._current_position == 7
     assert sensor._previous_position == 9
 
+    # async_added_to_hass() registers the sensor as the coordinator's first
+    # listener, which arms its periodic refresh timer. Shut it down so no
+    # timer is left dangling after the test (pytest-homeassistant-custom-
+    # component's verify_cleanup fixture fails the test otherwise).
+    await coordinator.async_shutdown()
+
 
 async def test_async_added_to_hass_rediffs_against_restored_baseline(hass, monkeypatch):
     """If the coordinator already has fresher data by the time the entity
@@ -779,6 +785,9 @@ async def test_async_added_to_hass_rediffs_against_restored_baseline(hass, monke
     assert sensor._previous_position == 6
     assert sensor._current_position == 4
 
+    # See comment in test_async_added_to_hass_restores_positions_from_storage.
+    await coordinator.async_shutdown()
+
 
 async def test_async_added_to_hass_without_prior_restore_data(hass, monkeypatch):
     """A brand-new entity (nothing in storage yet, e.g. first-ever startup)
@@ -805,6 +814,9 @@ async def test_async_added_to_hass_without_prior_restore_data(hass, monkeypatch)
 
     assert sensor._current_position == 2
     assert sensor._previous_position == 2
+
+    # See comment in test_async_added_to_hass_restores_positions_from_storage.
+    await coordinator.async_shutdown()
 
 
 def _icon_for_range(ranges: dict[str, str], default: str, value: float) -> str:
