@@ -166,12 +166,11 @@
   "issues": {
     "season_rollover": {
       "title": "FFBB Tracker: Team not found",
-      "description": "The team \"{team_name}\" has been unavailable on the FFBB API for several days. This typically occurs during season rollovers when the FFBB assigns new engagement and pool IDs. Click \"Submit\" below to reopen the team search and locate it again.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Search for \"{team_name}\" again",
-            "description": "This will open the team search so you can find \"{team_name}\" under its new engagement and pool IDs for this season."
+            "description": "The team \"{team_name}\" has been unavailable on the FFBB API for several days. This typically occurs during season rollovers when the FFBB assigns new engagement and pool IDs. This will open the team search so you can find \"{team_name}\" under its new engagement and pool IDs for this season."
           }
         }
       }
