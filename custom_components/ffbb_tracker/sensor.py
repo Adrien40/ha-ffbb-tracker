@@ -65,7 +65,7 @@ def _safe_int_value(val: Any) -> int | None:
         return None
     try:
         return int(val)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 
