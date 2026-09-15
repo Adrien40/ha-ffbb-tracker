@@ -1,5 +1,5 @@
 pytest-homeassistant-custom-component==0.13.365
-homeassistant==2026.2.3
+homeassistant==2026.9.2
 pytest-asyncio
 pytest-cov
 ruff
