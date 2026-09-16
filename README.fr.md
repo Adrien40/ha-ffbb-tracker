@@ -360,7 +360,7 @@ Cette intégration ne crée aucun identifiant, jeton ou compte externe : il n'y 
 
 ## 🤝 Liens utiles
 
-* 🏀 **Carte Lovelace Home Assistant :** [ha-ffbb-tracker-card](https://github.com/Adrien40/ha-ffbb-tracker-card)
+🏀 **Carte Lovelace Home Assistant :** [ha-ffbb-tracker-card](https://github.com/Adrien40/ha-ffbb-tracker-card)
 
 ---
 
