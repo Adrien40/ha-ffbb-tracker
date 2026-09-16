@@ -359,7 +359,7 @@ No credentials, tokens, or external accounts are created by this integration, so
 
 ## 🤝 Useful Links
 
-🏀 **Home Assistant Integration:** [ha-ffbb-tracker](https://github.com/Adrien40/ha-ffbb-tracker)
+🏀 **Home Assistant Lovelace Card:** [ha-ffbb-tracker-card](https://github.com/Adrien40/ha-ffbb-tracker-card)
 
 ---
 
