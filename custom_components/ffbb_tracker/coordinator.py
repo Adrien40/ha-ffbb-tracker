@@ -50,7 +50,7 @@ def _safe_int(value: Any) -> int | None:
         return None
     try:
         return int(value)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -66,6 +66,28 @@ def _build_logo_url(base_url: str | None, logo_id: Any) -> str | None:
     return (
         f"{base_url}/assets/{logo_id}"
         f"?height={LOGO_ASSET_HEIGHT}&fit=contain&format={LOGO_ASSET_FORMAT}"
+    )
+
+
+def _build_team_url(club_code: Any, engagement_id: Any) -> str | None:
+    """Build the official FFBB team URL from club code and engagement ID.
+
+    The official website structure requires:
+    https://competitions.ffbb.com/ligues/<ligue>/comites/<comite>/clubs/<club_code>/equipes/<engagement_id>
+    where the first 3 characters of the club code represent the league, and characters 3 to 7
+    represent the committee code.
+    """
+    if not club_code or not engagement_id:
+        return None
+    code_str = str(club_code).strip().lower()
+    eng_str = str(engagement_id).strip()
+    if len(code_str) < 7 or not eng_str:
+        return None
+    ligue = code_str[:3]
+    comite = code_str[3:7]
+    return (
+        f"https://competitions.ffbb.com/ligues/{ligue}/comites/{comite}/"
+        f"clubs/{code_str}/equipes/{eng_str}"
     )
 
 
@@ -415,6 +437,26 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
         raw_matches = data.get("rencontres") or []
         raw_standings = data.get("classements") or []
 
+        engagement_to_code: dict[str, str] = {}
+        for match in raw_matches:
+            raw_org1 = match.get("idOrganismeEquipe1")
+            if isinstance(raw_org1, dict) and raw_org1.get("code"):
+                eng1 = match.get("idEngagementEquipe1")
+                eng1_id = str(
+                    eng1.get("id", "") if isinstance(eng1, dict) else eng1 or ""
+                )
+                if eng1_id:
+                    engagement_to_code[eng1_id] = str(raw_org1["code"])
+
+            raw_org2 = match.get("idOrganismeEquipe2")
+            if isinstance(raw_org2, dict) and raw_org2.get("code"):
+                eng2 = match.get("idEngagementEquipe2")
+                eng2_id = str(
+                    eng2.get("id", "") if isinstance(eng2, dict) else eng2 or ""
+                )
+                if eng2_id:
+                    engagement_to_code[eng2_id] = str(raw_org2["code"])
+
         team_matches: list[MatchDetails] = []
         for match in raw_matches:
             eq1_engagement = match.get("idEngagementEquipe1")
@@ -434,7 +476,9 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             if self.engagement_id not in (eq1_id, eq2_id):
                 continue
 
-            parsed_match = self._parse_match(match, eq1_id == self.engagement_id)
+            parsed_match = self._parse_match(
+                match, eq1_id == self.engagement_id, engagement_to_code
+            )
             team_matches.append(parsed_match)
 
         team_matches.sort(
@@ -472,15 +516,22 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
 
         for row in raw_standings:
             raw_engagement = row.get("idEngagement")
+            club_code: str | None = None
             if isinstance(raw_engagement, dict):
                 row_engagement_id = str(raw_engagement.get("id", ""))
                 team_label = raw_engagement.get("nom") or row.get("nomEquipe", "N/A")
+                raw_org = raw_engagement.get("idOrganisme")
+                if isinstance(raw_org, dict) and raw_org.get("code"):
+                    club_code = str(raw_org["code"])
             elif raw_engagement is not None:
                 row_engagement_id = str(raw_engagement)
                 team_label = row.get("nomEquipe", "N/A")
             else:
                 row_engagement_id = ""
                 team_label = row.get("nomEquipe", "N/A")
+
+            if not club_code and row_engagement_id:
+                club_code = engagement_to_code.get(row_engagement_id)
 
             # Architectural choice: sanitize Directus string numbers into native integers
             # to guarantee compatibility with Home Assistant sensor state classes (measurement)
@@ -491,11 +542,7 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             won = _safe_int(row.get("gagnes"))
             lost = _safe_int(row.get("perdus"))
 
-            standing_url = (
-                f"https://competitions.ffbb.com/equipe/{row_engagement_id}"
-                if row_engagement_id
-                else None
-            )
+            standing_url = _build_team_url(club_code, row_engagement_id)
 
             standing_entry = {
                 "position": pos,
@@ -532,7 +579,12 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             fixtures=team_matches,
         )
 
-    def _parse_match(self, match: dict[str, Any], is_home: bool) -> MatchDetails:
+    def _parse_match(
+        self,
+        match: dict[str, Any],
+        is_home: bool,
+        engagement_to_code: dict[str, str] | None = None,
+    ) -> MatchDetails:
         """Parse raw match dictionary into a MatchDetails structure."""
         match_id = str(match.get("id", ""))
         match_number = str(match.get("numero", ""))
@@ -579,6 +631,8 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
         raw_org_eq2 = match.get("idOrganismeEquipe2")
         org_eq2: dict[str, Any] = raw_org_eq2 if isinstance(raw_org_eq2, dict) else {}
 
+        code_map = engagement_to_code or {}
+
         if is_home:
             team_name = match.get("nomEquipe1") or self.team_name
             opponent_name = match.get("nomEquipe2") or "Adversaire"
@@ -600,12 +654,11 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
         team_logo_url = _build_logo_url(base_url, team_org.get("logo"))
         opponent_logo_url = _build_logo_url(base_url, opponent_org.get("logo"))
 
-        team_url = f"https://competitions.ffbb.com/equipe/{self.engagement_id}"
-        opponent_url = (
-            f"https://competitions.ffbb.com/equipe/{opponent_engagement_id}"
-            if opponent_engagement_id
-            else None
-        )
+        team_code = team_org.get("code") or code_map.get(self.engagement_id)
+        opponent_code = opponent_org.get("code") or code_map.get(opponent_engagement_id)
+
+        team_url = _build_team_url(team_code, self.engagement_id)
+        opponent_url = _build_team_url(opponent_code, opponent_engagement_id)
 
         result: str | None = None
         if is_played and team_score is not None and opponent_score is not None:
