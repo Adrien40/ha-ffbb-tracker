@@ -18,11 +18,6 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
-from homeassistant.helpers import issue_registry as ir
-from homeassistant.helpers.update_coordinator import UpdateFailed
-from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from custom_components.ffbb_tracker.api import (
     FFBBApiError,
     FFBBConnectionError,
@@ -44,6 +39,10 @@ from custom_components.ffbb_tracker.coordinator import (
     FFBBDataUpdateCoordinator,
     _get_poule_cache,
 )
+from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.update_coordinator import UpdateFailed
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 def _make_coordinator(hass) -> FFBBDataUpdateCoordinator:
