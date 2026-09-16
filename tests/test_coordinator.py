@@ -247,6 +247,45 @@ def test_logo_url_none_when_client_is_none(hass):
     assert parsed.opponent_logo_url is None
 
 
+def test_team_and_opponent_urls_built_for_matches(hass, sample_poule_data):
+    """team_url and opponent_url are built from official FFBB website paths."""
+    coordinator = _make_coordinator(hass)
+    result = coordinator._process_poule_data(sample_poule_data)
+
+    last = result.last_match
+    assert last.team_url == "https://competitions.ffbb.com/equipe/engagement-123"
+    assert last.opponent_url is not None
+    assert last.opponent_url.startswith("https://competitions.ffbb.com/equipe/")
+
+    nxt = result.next_match
+    assert nxt.team_url == "https://competitions.ffbb.com/equipe/engagement-123"
+    assert nxt.opponent_url is not None
+    assert nxt.opponent_url.startswith("https://competitions.ffbb.com/equipe/")
+
+
+def test_opponent_url_none_when_engagement_missing(hass):
+    """When a fixture lacks opponent engagement id, opponent_url is None."""
+    coordinator = _make_coordinator(hass)
+    parsed = coordinator._parse_match(
+        {
+            "id": "match-no-opp",
+            "numero": "1",
+            "numeroJournee": "1",
+            "resultatEquipe1": None,
+            "resultatEquipe2": None,
+            "joue": False,
+            "nomEquipe1": "Basket Landes",
+            "nomEquipe2": "Adversaire",
+            "idEngagementEquipe1": {"id": "engagement-123"},
+            "idEngagementEquipe2": None,
+            "salle": None,
+        },
+        is_home=True,
+    )
+    assert parsed.team_url == "https://competitions.ffbb.com/equipe/engagement-123"
+    assert parsed.opponent_url is None
+
+
 def test_standings_handles_non_dict_idengagement_shapes(hass):
     """Directus sometimes returns idEngagement as a nested dict, but can
     also flatten it to a plain id string, or omit it entirely. Only the
@@ -287,11 +326,15 @@ def test_standings_handles_non_dict_idengagement_shapes(hass):
 
     flat_row = next(s for s in result.standings if s["team_name"] == "Flat Team")
     assert flat_row["position"] == 3
+    assert flat_row["url"] == "https://competitions.ffbb.com/equipe/engagement-flat"
+    assert flat_row["team_url"] == "https://competitions.ffbb.com/equipe/engagement-flat"
 
     missing_row = next(
         s for s in result.standings if s["team_name"] == "No Engagement Team"
     )
     assert missing_row["position"] == 4
+    assert missing_row["url"] is None
+    assert missing_row["team_url"] is None
 
 
 def test_standings_matches_tracked_engagement(hass, sample_poule_data):

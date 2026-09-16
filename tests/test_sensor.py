@@ -102,6 +102,8 @@ def _make_match(**overrides) -> MatchDetails:
         "gym_city": "Mont-de-Marsan",
         "team_logo_url": None,
         "opponent_logo_url": None,
+        "team_url": None,
+        "opponent_url": None,
         "raw": {},
     }
     defaults.update(overrides)
@@ -242,6 +244,22 @@ def test_next_match_opponent_sensor_entity_picture_reflects_logo(hass):
     assert sensor.entity_picture is None
 
 
+def test_next_match_opponent_sensor_exposes_team_urls(hass):
+    """Next match opponent sensor exposes team_url and opponent_url in attributes."""
+    coordinator = _make_coordinator(hass)
+    coordinator.data = _make_team_data(
+        next_match=_make_match(
+            team_url="https://competitions.ffbb.com/equipe/engagement-123",
+            opponent_url="https://competitions.ffbb.com/equipe/engagement-456",
+        )
+    )
+    sensor = FFBBNextMatchOpponentSensor(coordinator)
+    attrs = sensor.extra_state_attributes
+
+    assert attrs["team_url"] == "https://competitions.ffbb.com/equipe/engagement-123"
+    assert attrs["opponent_url"] == "https://competitions.ffbb.com/equipe/engagement-456"
+
+
 # ---------------------------------------------------------------------------
 # FFBBNextMatchVenueTypeSensor: entirely untested before this -- covers the
 # "home"/"away" state as well as the "no upcoming match" branch.
@@ -332,11 +350,15 @@ def test_last_match_opponent_sensor_entity_picture_and_logo_attrs(hass):
             is_played=True,
             team_logo_url="https://api.ffbb.app/assets/team",
             opponent_logo_url="https://api.ffbb.app/assets/opp",
+            team_url="https://competitions.ffbb.com/equipe/engagement-123",
+            opponent_url="https://competitions.ffbb.com/equipe/engagement-456",
         )
     )
     sensor = FFBBLastMatchOpponentSensor(coordinator)
     assert sensor.entity_picture == "https://api.ffbb.app/assets/opp"
     assert sensor.extra_state_attributes == {
+        "team_url": "https://competitions.ffbb.com/equipe/engagement-123",
+        "opponent_url": "https://competitions.ffbb.com/equipe/engagement-456",
         "team_logo_url": "https://api.ffbb.app/assets/team",
         "opponent_logo_url": "https://api.ffbb.app/assets/opp",
     }
@@ -375,6 +397,10 @@ def test_poule_sensor_reports_name_and_attrs(hass):
     assert sensor.native_value == "Excellence - Poule A"
     assert sensor.extra_state_attributes["competition"] == "Excellence Régionale"
     assert sensor.extra_state_attributes["team"] == "Basket Landes"
+    assert (
+        sensor.extra_state_attributes["url"]
+        == "https://competitions.ffbb.com/poule/poule-1"
+    )
 
 
 def test_poule_sensor_none_before_first_refresh(hass):
