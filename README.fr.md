@@ -358,6 +358,12 @@ Cette intégration ne crée aucun identifiant, jeton ou compte externe : il n'y 
 
 ---
 
+## 🤝 Liens utiles
+
+* 🏀 **Carte Lovelace Home Assistant :** [ha-ffbb-tracker-card](https://github.com/Adrien40/ha-ffbb-tracker-card)
+
+---
+
 ### 🌐 Langues supportées
 
 L'intégration est entièrement disponible en **Français** <img src="https://hatscripts.github.io/circle-flags/flags/fr.svg" width="16" valign="middle"> et en **Anglais** <img src="https://hatscripts.github.io/circle-flags/flags/gb.svg" width="16" valign="middle"> (interface de configuration, entités et calendrier).
