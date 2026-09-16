@@ -378,4 +378,4 @@ Projet sous licence **GPLv3**. Il s'agit d'un projet indépendant, sans aucun li
 
 <a href="https://www.buymeacoffee.com/adrien40"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" width="180"></a>
 
-<!-- Keywords: Home Assistant custom integration, FFBB, Basketball, scores, standings, calendar, sports tracker, local automation -->
+<!-- Keywords: Home Assistant custom integration, FFBB, Basketball, basket, scores, standings, calendar, sports tracker, local automation -->
