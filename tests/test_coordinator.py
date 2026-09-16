@@ -18,11 +18,6 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
-from homeassistant.helpers import issue_registry as ir
-from homeassistant.helpers.update_coordinator import UpdateFailed
-from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from custom_components.ffbb_tracker.api import (
     FFBBApiError,
     FFBBConnectionError,
@@ -42,8 +37,14 @@ from custom_components.ffbb_tracker.const import (
 from custom_components.ffbb_tracker.coordinator import (
     _POULE_CACHE_TTL,
     FFBBDataUpdateCoordinator,
+    _build_team_url,
     _get_poule_cache,
+    _safe_int,
 )
+from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.update_coordinator import UpdateFailed
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 def _make_coordinator(hass) -> FFBBDataUpdateCoordinator:
@@ -247,24 +248,62 @@ def test_logo_url_none_when_client_is_none(hass):
     assert parsed.opponent_logo_url is None
 
 
-def test_team_and_opponent_urls_built_for_matches(hass, sample_poule_data):
-    """team_url and opponent_url are built from official FFBB website paths."""
+@pytest.mark.parametrize(
+    ("club_code", "engagement_id", "expected"),
+    [
+        (
+            "NAQ0040141",
+            "200000005334722",
+            "https://competitions.ffbb.com/ligues/naq/comites/0040/clubs/naq0040141/equipes/200000005334722",
+        ),
+        (
+            "idf0075001",
+            "12345",
+            "https://competitions.ffbb.com/ligues/idf/comites/0075/clubs/idf0075001/equipes/12345",
+        ),
+        ("", "12345", None),
+        (None, "12345", None),
+        ("NAQ0040141", "", None),
+        ("NAQ0040141", None, None),
+        ("SHORT", "12345", None),
+    ],
+)
+def test_build_team_url(club_code, engagement_id, expected):
+    """_build_team_url builds the full official hierarchy or returns None."""
+    assert _build_team_url(club_code, engagement_id) == expected
+
+
+def test_team_and_opponent_urls_built_for_matches(hass):
+    """team_url and opponent_url are built from official FFBB website hierarchy."""
     coordinator = _make_coordinator(hass)
-    result = coordinator._process_poule_data(sample_poule_data)
+    parsed = coordinator._parse_match(
+        {
+            "id": "match-urls",
+            "numero": "1",
+            "numeroJournee": "1",
+            "resultatEquipe1": None,
+            "resultatEquipe2": None,
+            "joue": False,
+            "nomEquipe1": "Basket Landes",
+            "nomEquipe2": "Stade Montois",
+            "idEngagementEquipe1": {"id": "engagement-123"},
+            "idEngagementEquipe2": {"id": "engagement-456"},
+            "idOrganismeEquipe1": {"id": "org-1", "code": "NAQ0040141"},
+            "idOrganismeEquipe2": {"id": "org-2", "code": "NAQ0040002"},
+            "salle": None,
+        },
+        is_home=True,
+    )
+    assert parsed.team_url == (
+        "https://competitions.ffbb.com/ligues/naq/comites/0040/clubs/naq0040141/equipes/engagement-123"
+    )
+    assert parsed.opponent_url == (
+        "https://competitions.ffbb.com/ligues/naq/comites/0040/clubs/naq0040002/equipes/engagement-456"
+    )
 
-    last = result.last_match
-    assert last.team_url == "https://competitions.ffbb.com/equipe/engagement-123"
-    assert last.opponent_url is not None
-    assert last.opponent_url.startswith("https://competitions.ffbb.com/equipe/")
 
-    nxt = result.next_match
-    assert nxt.team_url == "https://competitions.ffbb.com/equipe/engagement-123"
-    assert nxt.opponent_url is not None
-    assert nxt.opponent_url.startswith("https://competitions.ffbb.com/equipe/")
-
-
-def test_opponent_url_none_when_engagement_missing(hass):
-    """When a fixture lacks opponent engagement id, opponent_url is None."""
+def test_opponent_url_none_when_engagement_or_code_missing(hass):
+    """When a fixture lacks opponent engagement id or club code, opponent_url is None."""
     coordinator = _make_coordinator(hass)
     parsed = coordinator._parse_match(
         {
@@ -278,12 +317,54 @@ def test_opponent_url_none_when_engagement_missing(hass):
             "nomEquipe2": "Adversaire",
             "idEngagementEquipe1": {"id": "engagement-123"},
             "idEngagementEquipe2": None,
+            "idOrganismeEquipe1": {"id": "org-1", "code": "NAQ0040141"},
+            "idOrganismeEquipe2": None,
             "salle": None,
         },
         is_home=True,
     )
-    assert parsed.team_url == "https://competitions.ffbb.com/equipe/engagement-123"
+    assert parsed.team_url == (
+        "https://competitions.ffbb.com/ligues/naq/comites/0040/clubs/naq0040141/equipes/engagement-123"
+    )
     assert parsed.opponent_url is None
+
+
+def test_standings_builds_team_url_when_code_available(hass):
+    """Standings rows construct full team URLs when organism code is available."""
+    coordinator = _make_coordinator(hass)
+    data = {
+        "id": "poule-1",
+        "nom": "Poule A",
+        "rencontres": [
+            {
+                "id": "match-1",
+                "idEngagementEquipe1": {"id": "engagement-flat"},
+                "idOrganismeEquipe1": {"id": "org-flat", "code": "NAQ0040141"},
+                "idEngagementEquipe2": {"id": "engagement-123"},
+                "idOrganismeEquipe2": {"id": "org-1", "code": "NAQ0040001"},
+            }
+        ],
+        "classements": [
+            {
+                "id": "rank-flat",
+                "idEngagement": "engagement-flat",
+                "nomEquipe": "Flat Team",
+                "matchJoues": 1,
+                "points": 2,
+                "position": 1,
+                "gagnes": 1,
+                "perdus": 0,
+            }
+        ],
+    }
+    result = coordinator._process_poule_data(data)
+    flat_row = result.standings[0]
+    assert flat_row["url"] == (
+        "https://competitions.ffbb.com/ligues/naq/comites/0040/clubs/naq0040141/equipes/engagement-flat"
+    )
+    assert flat_row["team_url"] == (
+        "https://competitions.ffbb.com/ligues/naq/comites/0040/clubs/naq0040141/equipes/engagement-flat"
+    )
 
 
 def test_standings_handles_non_dict_idengagement_shapes(hass):
@@ -326,10 +407,8 @@ def test_standings_handles_non_dict_idengagement_shapes(hass):
 
     flat_row = next(s for s in result.standings if s["team_name"] == "Flat Team")
     assert flat_row["position"] == 3
-    assert flat_row["url"] == "https://competitions.ffbb.com/equipe/engagement-flat"
-    assert (
-        flat_row["team_url"] == "https://competitions.ffbb.com/equipe/engagement-flat"
-    )
+    assert flat_row["url"] is None
+    assert flat_row["team_url"] is None
 
     missing_row = next(
         s for s in result.standings if s["team_name"] == "No Engagement Team"
@@ -471,8 +550,6 @@ def test_is_played_stays_false_when_joue_false_and_no_score(hass):
 )
 def test_safe_int_handles_malformed_scores(raw_value, expected):
     """_safe_int must never raise on unexpected API payload values."""
-    from custom_components.ffbb_tracker.coordinator import _safe_int
-
     assert _safe_int(raw_value) == expected
 
 
