@@ -461,7 +461,7 @@ class FFBBRankSensor(FFBBSensorBase):
                     "points": standing.points,
                     "played": standing.played,
                     "won": standing.won,
-                    "lost": lost,
+                    "lost": standing.lost,
                 }
             )
 
@@ -589,7 +589,7 @@ class FFBBPouleSensor(FFBBSensorBase):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return competition details and fallback pool link."""
+        """Return competition details."""
         if not self.coordinator.data:
             return {}
 
