@@ -1,5 +1,12 @@
 [project]
+name = "ha-ffbb-tracker"
+description = "Home Assistant custom integration to track FFBB (French Basketball Federation) teams, fixtures, live scores, and standings."
+readme = "README.md"
 requires-python = ">=3.14"
+license = { text = "GPL-3.0-only" }
+authors = [
+    { name = "Adrien40" },
+]
 
 [tool.ruff]
 target-version = "py314"
