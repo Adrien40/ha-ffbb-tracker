@@ -257,7 +257,9 @@ def test_next_match_opponent_sensor_exposes_team_urls(hass):
     attrs = sensor.extra_state_attributes
 
     assert attrs["team_url"] == "https://competitions.ffbb.com/equipe/engagement-123"
-    assert attrs["opponent_url"] == "https://competitions.ffbb.com/equipe/engagement-456"
+    assert (
+        attrs["opponent_url"] == "https://competitions.ffbb.com/equipe/engagement-456"
+    )
 
 
 # ---------------------------------------------------------------------------

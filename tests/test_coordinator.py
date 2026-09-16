@@ -327,7 +327,9 @@ def test_standings_handles_non_dict_idengagement_shapes(hass):
     flat_row = next(s for s in result.standings if s["team_name"] == "Flat Team")
     assert flat_row["position"] == 3
     assert flat_row["url"] == "https://competitions.ffbb.com/equipe/engagement-flat"
-    assert flat_row["team_url"] == "https://competitions.ffbb.com/equipe/engagement-flat"
+    assert (
+        flat_row["team_url"] == "https://competitions.ffbb.com/equipe/engagement-flat"
+    )
 
     missing_row = next(
         s for s in result.standings if s["team_name"] == "No Engagement Team"
