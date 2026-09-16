@@ -357,6 +357,12 @@ No credentials, tokens, or external accounts are created by this integration, so
 
 ---
 
+## 🤝 Useful Links
+
+🏀 **Home Assistant Integration:** [ha-ffbb-tracker](https://github.com/Adrien40/ha-ffbb-tracker)
+
+---
+
 ### 🌐 Supported Languages
 
 The integration is fully available in **French** <img src="https://hatscripts.github.io/circle-flags/flags/fr.svg" width="16" valign="middle"> and **English** <img src="https://hatscripts.github.io/circle-flags/flags/gb.svg" width="16" valign="middle"> (configuration flow, entities, and calendar).
