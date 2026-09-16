@@ -65,7 +65,7 @@ def _safe_int_value(val: Any) -> int | None:
         return None
     try:
         return int(val)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -185,6 +185,8 @@ class FFBBNextMatchOpponentSensor(FFBBSensorBase):
         match = self.coordinator.data.next_match
         attrs: dict[str, Any] = {
             "opponent_club_id": match.opponent_club_id,
+            "team_url": match.team_url,
+            "opponent_url": match.opponent_url,
             ATTR_IS_HOME: match.is_home,
             ATTR_GYM_NAME: match.gym_name,
             ATTR_GYM_ADDRESS: match.gym_address,
@@ -353,12 +355,14 @@ class FFBBLastMatchOpponentSensor(FFBBSensorBase):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return both clubs' logo URLs for the last played match."""
+        """Return both clubs' logo URLs and team links for the last played match."""
         if not self.coordinator.data or not self.coordinator.data.last_match:
             return {}
 
         match = self.coordinator.data.last_match
         return {
+            "team_url": match.team_url,
+            "opponent_url": match.opponent_url,
             ATTR_TEAM_LOGO_URL: match.team_logo_url,
             ATTR_OPPONENT_LOGO_URL: match.opponent_logo_url,
         }
@@ -457,7 +461,7 @@ class FFBBRankSensor(FFBBSensorBase):
                     "points": standing.points,
                     "played": standing.played,
                     "won": standing.won,
-                    "lost": standing.lost,
+                    "lost": lost,
                 }
             )
 
@@ -585,13 +589,14 @@ class FFBBPouleSensor(FFBBSensorBase):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return competition details."""
+        """Return competition details and fallback pool link."""
         if not self.coordinator.data:
             return {}
 
         return {
             "competition": self.coordinator.data.competition_name,
             "team": self.coordinator.data.team_name,
+            "url": f"https://competitions.ffbb.com/poule/{self.coordinator.poule_id}",
         }
 
 

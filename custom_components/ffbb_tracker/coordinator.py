@@ -50,7 +50,7 @@ def _safe_int(value: Any) -> int | None:
         return None
     try:
         return int(value)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -117,6 +117,8 @@ class MatchDetails:
     team_logo_url: str | None
     opponent_logo_url: str | None
     raw: dict[str, Any]
+    team_url: str | None = None
+    opponent_url: str | None = None
     is_stale: bool = False
 
     @property
@@ -489,6 +491,12 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             won = _safe_int(row.get("gagnes"))
             lost = _safe_int(row.get("perdus"))
 
+            standing_url = (
+                f"https://competitions.ffbb.com/equipe/{row_engagement_id}"
+                if row_engagement_id
+                else None
+            )
+
             standing_entry = {
                 "position": pos,
                 "team_name": team_label,
@@ -496,6 +504,8 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
                 "played": played,
                 "won": won,
                 "lost": lost,
+                "url": standing_url,
+                "team_url": standing_url,
             }
             parsed_standings.append(standing_entry)
 
@@ -551,6 +561,19 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
         ):
             is_played = True
 
+        eq1_engagement = match.get("idEngagementEquipe1")
+        eq2_engagement = match.get("idEngagementEquipe2")
+        eq1_id = (
+            str(eq1_engagement.get("id", ""))
+            if isinstance(eq1_engagement, dict)
+            else str(eq1_engagement or "")
+        )
+        eq2_id = (
+            str(eq2_engagement.get("id", ""))
+            if isinstance(eq2_engagement, dict)
+            else str(eq2_engagement or "")
+        )
+
         raw_org_eq1 = match.get("idOrganismeEquipe1")
         org_eq1: dict[str, Any] = raw_org_eq1 if isinstance(raw_org_eq1, dict) else {}
         raw_org_eq2 = match.get("idOrganismeEquipe2")
@@ -563,6 +586,7 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             team_org = org_eq1
             team_score = score1
             opponent_score = score2
+            opponent_engagement_id = eq2_id
         else:
             team_name = match.get("nomEquipe2") or self.team_name
             opponent_name = match.get("nomEquipe1") or "Adversaire"
@@ -570,10 +594,18 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             team_org = org_eq2
             team_score = score2
             opponent_score = score1
+            opponent_engagement_id = eq1_id
 
         base_url = self.client.base_url if self.client else None
         team_logo_url = _build_logo_url(base_url, team_org.get("logo"))
         opponent_logo_url = _build_logo_url(base_url, opponent_org.get("logo"))
+
+        team_url = f"https://competitions.ffbb.com/equipe/{self.engagement_id}"
+        opponent_url = (
+            f"https://competitions.ffbb.com/equipe/{opponent_engagement_id}"
+            if opponent_engagement_id
+            else None
+        )
 
         result: str | None = None
         if is_played and team_score is not None and opponent_score is not None:
@@ -612,4 +644,6 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             team_logo_url=team_logo_url,
             opponent_logo_url=opponent_logo_url,
             raw=match,
+            team_url=team_url,
+            opponent_url=opponent_url,
         )
