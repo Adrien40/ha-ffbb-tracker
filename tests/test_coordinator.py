@@ -37,9 +37,7 @@ from custom_components.ffbb_tracker.const import (
 from custom_components.ffbb_tracker.coordinator import (
     _POULE_CACHE_TTL,
     FFBBDataUpdateCoordinator,
-    _build_team_url,
     _get_poule_cache,
-    _safe_int,
 )
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import UpdateFailed
@@ -270,6 +268,8 @@ def test_logo_url_none_when_client_is_none(hass):
 )
 def test_build_team_url(club_code, engagement_id, expected):
     """_build_team_url builds the full official hierarchy or returns None."""
+    from custom_components.ffbb_tracker.coordinator import _build_team_url
+
     assert _build_team_url(club_code, engagement_id) == expected
 
 
@@ -550,6 +550,8 @@ def test_is_played_stays_false_when_joue_false_and_no_score(hass):
 )
 def test_safe_int_handles_malformed_scores(raw_value, expected):
     """_safe_int must never raise on unexpected API payload values."""
+    from custom_components.ffbb_tracker.coordinator import _safe_int
+
     assert _safe_int(raw_value) == expected
 
 
