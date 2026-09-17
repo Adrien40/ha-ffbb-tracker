@@ -928,8 +928,7 @@ def test_check_token_refresh_health_clears_issue_below_threshold(hass):
     coordinator._check_token_refresh_health()
 
     assert (
-        ir.async_get(hass).async_get_issue(DOMAIN, _token_issue_id(coordinator))
-        is None
+        ir.async_get(hass).async_get_issue(DOMAIN, _token_issue_id(coordinator)) is None
     )
 
 
