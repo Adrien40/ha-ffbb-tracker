@@ -357,7 +357,7 @@ No credentials, tokens, or external accounts are created by this integration, so
 
 ---
 
-## 🤝 Useful Links
+### 🤝 Useful Links
 
 🏀 **Home Assistant Lovelace Card:** [ha-ffbb-tracker-card](https://github.com/Adrien40/ha-ffbb-tracker-card)
 
