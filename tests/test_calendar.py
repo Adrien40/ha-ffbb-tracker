@@ -167,6 +167,29 @@ def test_event_returns_first_fixture_not_yet_ended(hass):
     assert event.uid == "ffbb_match_upcoming"
 
 
+def test_event_is_none_when_all_fixtures_are_finished(hass):
+    """If every fixture's 2h event window has already elapsed, there is
+    no 'next' event to report -- the loop must fall through to the
+    trailing `return None`, not raise or return a stale finished match.
+    """
+    coordinator = _make_coordinator(hass)
+    now = datetime.now(UTC)
+    finished_yesterday = _make_match(
+        match_id="yesterday", match_date=now - timedelta(days=1)
+    )
+    finished_last_week = _make_match(
+        match_id="last-week", match_date=now - timedelta(days=7)
+    )
+    coordinator.data = _make_team_data(
+        fixtures=[finished_yesterday, finished_last_week]
+    )
+    entity = FFBBCalendarEntity(coordinator)
+
+    event = entity.event
+
+    assert event is None
+
+
 def test_event_still_reports_match_within_its_2h_window(hass):
     """A match that started 1h ago (still 'live', within the 2h event window) counts."""
     coordinator = _make_coordinator(hass)

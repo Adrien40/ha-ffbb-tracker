@@ -337,6 +337,24 @@ async def test_throttle_waits_when_called_again_before_delay_elapses():
     assert 0 < sleep_calls[0] <= 0.5
 
 
+@pytest.mark.asyncio
+async def test_request_calls_throttle_when_rate_limiter_configured():
+    """When a FFBBClient is built with a rate_limiter, _request() must
+    call its throttle() before issuing the HTTP GET -- this is the only
+    thing wiring the limiter to actual outbound requests, as opposed to
+    the limiter's own pacing logic (tested in isolation above).
+    """
+    session = MagicMock()
+    session.get = MagicMock(return_value=_mock_response(200, {"data": []}))
+    limiter = FFBBRateLimiter(delay=0)
+    limiter.throttle = AsyncMock(wraps=limiter.throttle)
+    client = FFBBClient(session, rate_limiter=limiter)
+
+    await client._request("items/foo")
+
+    limiter.throttle.assert_awaited_once()
+
+
 # --- _refresh_token error handling ------------------------------------------
 
 

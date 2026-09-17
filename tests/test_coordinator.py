@@ -368,6 +368,46 @@ def test_standings_builds_team_url_when_code_available(hass):
     )
 
 
+def test_standings_reads_club_code_from_nested_idorganisme(hass):
+    """When a classement row's idEngagement is a dict that itself embeds
+    idOrganisme.code, that nested code must be used directly for the
+    standing's team_url -- without needing the rencontres-derived
+    engagement_to_code fallback map at all.
+    """
+    coordinator = _make_coordinator(hass)
+    data = {
+        "id": "poule-1",
+        "nom": "Poule A",
+        "rencontres": [],
+        "classements": [
+            {
+                "id": "rank-1",
+                "idEngagement": {
+                    "id": "engagement-nested",
+                    "nom": "Nested Org Team",
+                    "idOrganisme": {"id": "org-nested", "code": "NAQ0040999"},
+                },
+                "nomEquipe": "Nested Org Team",
+                "matchJoues": 2,
+                "points": 4,
+                "position": 1,
+                "gagnes": 2,
+                "perdus": 0,
+            }
+        ],
+    }
+
+    result = coordinator._process_poule_data(data)
+
+    row = result.standings[0]
+    assert row["team_name"] == "Nested Org Team"
+    assert row["url"] == (
+        "https://competitions.ffbb.com/ligues/naq/comites/0040/"
+        "clubs/naq0040999/equipes/engagement-nested"
+    )
+    assert row["team_url"] == row["url"]
+
+
 def test_standings_handles_non_dict_idengagement_shapes(hass):
     """Directus sometimes returns idEngagement as a nested dict, but can
     also flatten it to a plain id string, or omit it entirely. Only the
@@ -847,6 +887,50 @@ def _minimal_payload() -> dict:
 def _issue_id(coordinator: FFBBDataUpdateCoordinator) -> str:
     """Return the repair-issue id used for this coordinator's team."""
     return f"season_rollover_{coordinator.engagement_id}"
+
+
+def _token_issue_id(coordinator: FFBBDataUpdateCoordinator) -> str:
+    """Return the repair-issue id used for this coordinator's token health."""
+    return f"token_refresh_failing_{coordinator.engagement_id}"
+
+
+def test_check_token_refresh_health_raises_issue_past_threshold(hass):
+    """Once the client reports token_refresh_failures at or above
+    TOKEN_REFRESH_FAILURE_THRESHOLD, a token_refresh_failing repair issue
+    must be raised with the team name available to the translated title.
+    """
+    coordinator = _make_coordinator(hass)
+    coordinator.client = AsyncMock()
+    coordinator.client.token_refresh_failures = 3
+
+    coordinator._check_token_refresh_health()
+
+    issue = ir.async_get(hass).async_get_issue(DOMAIN, _token_issue_id(coordinator))
+    assert issue is not None
+    assert issue.translation_key == "token_refresh_failing"
+    assert issue.translation_placeholders == {"team_name": coordinator.team_name}
+
+
+def test_check_token_refresh_health_clears_issue_below_threshold(hass):
+    """A successful refresh (failures back below the threshold) must clear
+    any previously-raised token_refresh_failing issue.
+    """
+    coordinator = _make_coordinator(hass)
+    coordinator.client = AsyncMock()
+    coordinator.client.token_refresh_failures = 3
+    coordinator._check_token_refresh_health()
+    assert (
+        ir.async_get(hass).async_get_issue(DOMAIN, _token_issue_id(coordinator))
+        is not None
+    )
+
+    coordinator.client.token_refresh_failures = 0
+    coordinator._check_token_refresh_health()
+
+    assert (
+        ir.async_get(hass).async_get_issue(DOMAIN, _token_issue_id(coordinator))
+        is None
+    )
 
 
 async def test_single_not_found_does_not_raise_issue(hass):
