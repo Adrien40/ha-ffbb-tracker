@@ -14,6 +14,8 @@ A **comprehensive Home Assistant integration** to track match results, schedules
 
 > ℹ️ **Good to know**: This integration queries the public Directus API used by the official `competitions.ffbb.com` web app, reusing the same public, read-only access token and browser User-Agent as the official site. No personal account or credentials are required. It fetches fixtures, results, and pool standings in a single optimized request.
 
+> 🖥️ Dashboard card available: Want a ready-made Lovelace card instead of building your own dashboard? Check out the FFBB Tracker Card — fixtures, live scores, and standings in one card.
+
 If you find this project useful, you can support its development 🙏
 
 <a href="https://www.buymeacoffee.com/adrien40"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" width="160"></a>
