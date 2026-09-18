@@ -70,7 +70,7 @@ Conçue pour les joueuses, joueurs, parents et supporters de basketball amateur 
 
 ### ✅ Compatibilité et prérequis
 * 🏷️ **Compétitions supportées** : toutes les équipes et compétitions répertoriées sur `competitions.ffbb.com` (seniors, jeunes, championnats départementaux, régionaux et nationaux).
-* ⚙️ **Version Home Assistant requise** : version 2026.3.0 ou supérieure recommandée.
+* ⚙️ **Version Home Assistant requise** : version 2026.3.0 ou supérieure.
 * 🌐 **Connexion internet** : requise pour actualiser les données depuis les serveurs de la FFBB.
 * 🔍 **Recherche simple** :
   * Par nom de club ou de commune (ex. : *Basket Landes*, *Paris*).
