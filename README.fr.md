@@ -53,7 +53,7 @@ Si ce projet vous est utile, vous pouvez soutenir son développement 🙏
 
 ### 📅 Calendrier officiel
 <p align="center">
-  <img src="docs/screenshots/calendar.png" width="550" alt="Détails de la rencontre dans le calendrier">
+  <img src="docs/screenshots/calendar.png" width="500" alt="Détails de la rencontre dans le calendrier">
 </p>
 <p align="center">
   <em>📅 Calendrier des rencontres, adresse de la salle et résultats directement dans votre calendrier</em>
