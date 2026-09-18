@@ -14,7 +14,7 @@ Une **intégration complète pour Home Assistant** qui suit les résultats, cale
 
 > ℹ️ **À savoir** : cette intégration interroge l'API publique Directus utilisée par l'application web officielle `competitions.ffbb.com`, avec le même jeton d'accès public (lecture seule) et le même User-Agent de navigateur que le site officiel. Aucun compte ni identifiant personnel n'est nécessaire. Elle récupère l'ensemble des rencontres, résultats et classements de la poule en une seule requête optimisée.
 
-> 🖥️ **Carte Lovelace disponible** : envie d'une carte de tableau de bord prête à l'emploi plutôt que de construire la vôtre ? Découvrez la carte compagnon [FFBB Tracker Card](https://github.com/Adrien40/ha-ffbb-tracker-card) — rencontres, scores en direct et classements dans une seule carte.
+> 🖥️ **Carte Lovelace disponible** : envie d'une carte de tableau de bord prête à l'emploi plutôt que de construire la vôtre ? Découvrez la carte [FFBB Tracker Card](https://github.com/Adrien40/ha-ffbb-tracker-card) - rencontres, scores en direct et classements dans une seule carte.
 
 
 Si ce projet vous est utile, vous pouvez soutenir son développement 🙏
