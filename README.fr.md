@@ -163,8 +163,6 @@ Les entités `next_match_opponent` (Adversaire), `next_match_venue_type` (Terrai
 
 Les deux valent `None` lorsqu'un club n'a pas de logo enregistré à la FFBB (fréquent pour les petits clubs) — vérifiez toujours la présence d'une valeur avant de l'utiliser dans un template. Les deux entités « Adversaire » exposent en plus `entity_picture` avec le logo adverse, qui s'affiche alors nativement dans le journal, l'historique et la plupart des cartes d'entités, sans configuration supplémentaire.
 
-Ce sont de simples URLs d'images pointant vers le serveur d'assets de la FFBB — il n'y a pas de carte Lovelace fournie avec l'intégration pour les afficher, une carte générique existante (`picture-elements`, `button-card`, `mushroom`…) pilotée par un court template faisant très bien l'affaire sans ajouter de dépendance à cette intégration. Si vous voulez qu'un logo manquant ou cassé bascule sur une image de secours plutôt que sur une case vide, copiez le fichier `custom_components/ffbb_tracker/brand/icon.png` de ce dépôt dans votre dossier `/config/www/` (il devient alors accessible à `/local/ffbb_tracker_icon.png`) et pointez le `onerror`/l'image de secours de votre carte vers ce chemin — il est servi localement par votre propre instance Home Assistant, donc ça continue de fonctionner même si les serveurs de la FFBB sont injoignables.
-
 ---
 
 ### 🚀 Configuration
