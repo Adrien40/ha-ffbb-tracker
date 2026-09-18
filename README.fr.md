@@ -358,25 +358,6 @@ Cette intégration ne crée aucun identifiant, jeton ou compte externe : il n'y 
 
 ---
 
-### 🧩 Écosystème du projet
-
-Cette intégration ne fait qu'exposer les données FFBB dans Home Assistant : pour un affichage visuel sur votre tableau de bord (scores, classement, modales interactives...), installez également la carte Lovelace dédiée.
-
-```
-📡 ha-ffbb-tracker (vous êtes ici)      🖼️ ha-ffbb-tracker-card
-   récupère les données          →         affiche les données
-   depuis la FFBB                          sur votre dashboard
-```
-
-| | |
-|---|---|
-| 📡 **ha-ffbb-tracker** | Cette intégration — crée les entités (`sensor.*`) à partir des données FFBB. |
-| 🖼️ **[ha-ffbb-tracker-card](https://github.com/Adrien40/ha-ffbb-tracker-card)** | La carte Lovelace — habille les entités ci-dessus dans une interface visuelle sur votre dashboard. |
-
-> 💡 Vous venez de configurer votre équipe ? Ajoutez maintenant [ha-ffbb-tracker-card](https://github.com/Adrien40/ha-ffbb-tracker-card) sur votre tableau de bord pour visualiser les données.
-
----
-
 ### 🌐 Langues supportées
 
 L'intégration est entièrement disponible en **Français** <img src="https://hatscripts.github.io/circle-flags/flags/fr.svg" width="16" valign="middle"> et en **Anglais** <img src="https://hatscripts.github.io/circle-flags/flags/gb.svg" width="16" valign="middle"> (interface de configuration, entités et calendrier).
