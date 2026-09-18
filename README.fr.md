@@ -75,7 +75,7 @@ Conçue pour les joueuses, joueurs, parents et supporters de basketball amateur 
 * 🔍 **Recherche simple** :
   * Par nom de club ou de commune (ex. : *Basket Landes*, *Paris*).
   * Par code officiel de club (ex. : *NAQ0040141*).
-  * Par URL complète de la page équipe copiée depuis `competitions.ffbb.com`.
+  * Par URL complète de la page équipe copiée depuis `competitions.ffbb.com` ou par identifiant numérique direct d'engagement.
 
 ---
 
