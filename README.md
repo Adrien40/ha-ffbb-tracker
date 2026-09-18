@@ -44,7 +44,7 @@ If you find this project useful, you can support its development 🙏
 
 ### 🔍 Entities Overview
 <p align="center">
-  <img src="docs/screenshots/entities_overview.png" width="517" alt="Entities Overview">
+  <img src="docs/screenshots/entities_overview.png" width="800" alt="Entities Overview">
 </p>
 <p align="center">
   <em>🔍 Entities automatically created for each tracked team</em>
@@ -52,7 +52,7 @@ If you find this project useful, you can support its development 🙏
 
 ### 📅 Official Calendar
 <p align="center">
-  <img src="docs/screenshots/calendar.png" width="735" alt="Official Calendar Event">
+  <img src="docs/screenshots/calendar.png" width="640" alt="Official Calendar Event">
 </p>
 <p align="center">
   <em>📅 Match fixtures, venue address, and results directly in your calendar</em>
