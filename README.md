@@ -50,7 +50,7 @@ If you find this project useful, you can support its development 🙏
 
 ### 📅 Official Calendar
 <p align="center">
-  <img src="docs/screenshots/calendar.png" width="373" alt="Official Calendar Event">
+  <img src="docs/screenshots/calendar.png" width="735" alt="Official Calendar Event">
 </p>
 <p align="center">
   <em>📅 Match fixtures, venue address, and results directly in your calendar</em>
