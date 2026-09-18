@@ -43,9 +43,19 @@ Si ce projet vous est utile, vous pouvez soutenir son développement 🙏
 
 ## 📸 Aperçu dans Home Assistant
 
+### 📊 Visualisation
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Adrien40/ha-ffbb-tracker/main/docs/screenshots/dashboard_overview.png" width="500">
+</p>
+
+<p align="center">
+  <em>📊 Vue d’ensemble des données de la piscine dans Home Assistant</em>
+</p>
+
 ### 🔍 Aperçu des entités
 <p align="center">
-  <img src="docs/screenshots/entities_overview.png" width="600" alt="Aperçu des entités">
+  <img src="https://raw.githubusercontent.com/Adrien40/ha-ffbb-tracker/main/docs/screenshots/entities_overview.png" width="600" alt="Aperçu des entités">
 </p>
 <p align="center">
   <em>🔍 Entités créées automatiquement pour chaque équipe suivie</em>
