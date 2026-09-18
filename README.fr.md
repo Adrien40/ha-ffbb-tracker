@@ -45,7 +45,7 @@ Si ce projet vous est utile, vous pouvez soutenir son développement 🙏
 
 ### 🔍 Aperçu des entités
 <p align="center">
-  <img src="docs/screenshots/entities_overview.png" width="550" alt="Aperçu des entités">
+  <img src="docs/screenshots/entities_overview.png" width="600" alt="Aperçu des entités">
 </p>
 <p align="center">
   <em>🔍 Entités créées automatiquement pour chaque équipe suivie</em>
