@@ -3,7 +3,7 @@
 # FFBB Tracker for Home Assistant 🏀
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/v/release/Adrien40/ha-ffbb-tracker)](https://github.com/Adrien40/ha-ffbb-tracker/releases)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://github.com/Adrien40/ha-ffbb-tracker/blob/main/LICENSE)
 [![Tests](https://img.shields.io/github/actions/workflow/status/Adrien40/ha-ffbb-tracker/tests.yml?branch=main&label=tests)](https://github.com/Adrien40/ha-ffbb-tracker/actions/workflows/tests.yml)
 [![Validate](https://img.shields.io/github/actions/workflow/status/Adrien40/ha-ffbb-tracker/validate.yml?branch=main&label=hassfest%2Fhacs)](https://github.com/Adrien40/ha-ffbb-tracker/actions/workflows/validate.yml)
 [![Linting](https://img.shields.io/github/actions/workflow/status/Adrien40/ha-ffbb-tracker/lint.yml?branch=main&label=lint)](https://github.com/Adrien40/ha-ffbb-tracker/actions/workflows/lint.yml)
