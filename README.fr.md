@@ -50,7 +50,7 @@ Si ce projet vous est utile, vous pouvez soutenir son développement 🙏
 </p>
 
 <p align="center">
-  <em>📊 Vue d’ensemble des données de la piscine dans Home Assistant</em>
+  <em>📊 Vue d’ensemble des données dans Home Assistant</em>
 </p>
 
 ### 🔍 Aperçu des entités
