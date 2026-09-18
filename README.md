@@ -163,8 +163,6 @@ The `next_match_location` and `next_match_opponent` entities expose attributes d
 
 Both are `None` when a club has no logo on file with the FFBB (common for smaller clubs) — always check for a value before using either in a template. The two `*_opponent` sensors also set `entity_picture` to the opponent's logo, so it shows up natively in the logbook, history, and most entity cards without any extra configuration.
 
-These are plain image URLs pointing at the FFBB's own asset server — there's no bundled Lovelace card to render them, since a generic card (`picture-elements`, `button-card`, `mushroom`, …) driven by a short template does the job without adding a dependency to this integration. If you want a broken/missing logo to fall back to something branded instead of a blank image, copy this repo's `custom_components/ffbb_tracker/brand/icon.png` into your `/config/www/` folder (making it available at `/local/ffbb_tracker_icon.png`) and point your card's `onerror`/fallback image at that path — it's served locally by your own Home Assistant instance, so it keeps working even if the FFBB's servers are unreachable.
-
 ---
 
 ### 🚀 Configuration
