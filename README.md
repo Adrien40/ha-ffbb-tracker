@@ -44,7 +44,7 @@ If you find this project useful, you can support its development 🙏
 
 ### 🔍 Entities Overview
 <p align="center">
-  <img src="docs/screenshots/entities_overview.png" width="600" alt="Entities Overview">
+  <img src="https://raw.githubusercontent.com/Adrien40/ha-ffbb-tracker-card/refs/heads/main/docs/screenshots/entities_overview.png" width="600" alt="Entities Overview">
 </p>
 <p align="center">
   <em>🔍 Entities automatically created for each tracked team</em>
@@ -52,7 +52,7 @@ If you find this project useful, you can support its development 🙏
 
 ### 📅 Official Calendar
 <p align="center">
-  <img src="docs/screenshots/calendar.png" width="500" alt="Official Calendar Event">
+  <img src="https://raw.githubusercontent.com/Adrien40/ha-ffbb-tracker-card/refs/heads/main/docs/screenshots/calendar.png" width="500" alt="Official Calendar Event">
 </p>
 <p align="center">
   <em>📅 Match fixtures, venue address, and results directly in your calendar</em>
