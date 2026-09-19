@@ -1040,3 +1040,41 @@ async def test_api_error_wrapped_as_update_failed(hass):
 
     assert coordinator._not_found_since is None
     assert ir.async_get(hass).async_get_issue(DOMAIN, _issue_id(coordinator)) is None
+
+
+def test_standings_rows_expose_draws_from_the_api(hass):
+    """Every standings row's `draws` comes straight from the API's `nuls`
+    field, so the dashboard card can fill its "N" column -- nothing derived
+    or guessed, since the FFBB API communicates this directly."""
+    coordinator = _make_coordinator(hass)
+    data = {
+        "id": "poule-1",
+        "nom": "Poule A",
+        "rencontres": [],
+        "classements": [
+            {
+                "idEngagement": "engagement-123",
+                "nomEquipe": "Basket Landes",
+                "position": 1,
+                "points": 5,
+                "matchJoues": 3,
+                "gagnes": 2,
+                "perdus": 1,
+                "nuls": "0",
+            },
+            {
+                "idEngagement": "engagement-other",
+                "nomEquipe": "No Counts Yet",
+                "position": 2,
+                "points": 0,
+            },
+        ],
+    }
+    result = coordinator._process_poule_data(data)
+
+    # Second row has no "nuls" key at all: None, same as any other missing
+    # Directus field -- no local guesswork substituted for it.
+    assert [row["draws"] for row in result.standings] == [0, None]
+    assert result.standings[0]["won"] == 2
+    assert result.standings[0]["lost"] == 1
+    assert result.standings[0]["played"] == 3
