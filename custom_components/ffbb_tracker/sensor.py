@@ -599,6 +599,11 @@ class FFBBPouleSensor(FFBBSensorBase):
             home_team = match.team_name if is_home else match.opponent_name
             away_team = match.opponent_name if is_home else match.team_name
 
+            home_logo = match.team_logo_url if is_home else match.opponent_logo_url
+            away_logo = match.opponent_logo_url if is_home else match.team_logo_url
+            home_url = match.team_url if is_home else match.opponent_url
+            away_url = match.opponent_url if is_home else match.team_url
+
             score: str | None = None
             if (
                 match.is_played
@@ -616,11 +621,21 @@ class FFBBPouleSensor(FFBBSensorBase):
                     "match_number": match.match_number,
                     "home_team": home_team,
                     "away_team": away_team,
+                    "home_logo": home_logo,
+                    "away_logo": away_logo,
+                    "home_url": home_url,
+                    "away_url": away_url,
                     "date": (
                         match.match_date.isoformat() if match.match_date else None
                     ),
                     "score": score,
                     "is_played": match.is_played,
+                    "result": match.result,
+                    "is_home": is_home,
+                    "gym_name": match.gym_name,
+                    "gym_address": match.gym_address,
+                    "gym_city": match.gym_city,
+                    "is_stale": match.is_stale,
                 }
             )
 
