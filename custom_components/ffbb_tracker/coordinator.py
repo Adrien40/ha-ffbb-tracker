@@ -54,7 +54,6 @@ def _safe_int(value: Any) -> int | None:
         return None
 
 
-
 def _build_logo_url(base_url: str | None, logo_id: Any) -> str | None:
     """Turn a Directus asset id into an absolute, pre-sized logo URL.
 
