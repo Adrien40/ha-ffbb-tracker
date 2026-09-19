@@ -283,7 +283,12 @@ class FFBBClient:
                 "classements.id,classements.idEngagement.id,classements.idEngagement.nom,"
                 "classements.idEngagement.idOrganisme.code,"
                 "classements.matchJoues,classements.points,classements.position,"
-                "classements.gagnes,classements.perdus"
+                "classements.gagnes,classements.perdus,classements.nuls,"
+                "classements.nombreForfaits,classements.nombreDefauts,"
+                "classements.penalitesArbitrage,classements.penalitesEntraineur,"
+                "classements.penalites,classements.quotient,"
+                "classements.paniersMarques,classements.paniersEncaisses,"
+                "classements.difference"
             ),
             "deep[rencontres][_limit]": self._RENCONTRES_LIMIT,
             "deep[rencontres][_sort]": "date_rencontre",
