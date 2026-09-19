@@ -54,6 +54,7 @@ def _safe_int(value: Any) -> int | None:
         return None
 
 
+
 def _build_logo_url(base_url: str | None, logo_id: Any) -> str | None:
     """Turn a Directus asset id into an absolute, pre-sized logo URL.
 
@@ -541,6 +542,19 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             played = _safe_int(row.get("matchJoues"))
             won = _safe_int(row.get("gagnes"))
             lost = _safe_int(row.get("perdus"))
+            # Confirmed readable by the public Directus role by directly
+            # querying the API (fields=classements.*, same token used
+            # elsewhere in this file): it's real data, not derived.
+            draws = _safe_int(row.get("nuls"))
+            forfeits = _safe_int(row.get("nombreForfaits"))
+            defaults = _safe_int(row.get("nombreDefauts"))
+            referee_penalties = _safe_int(row.get("penalitesArbitrage"))
+            coach_penalties = _safe_int(row.get("penalitesEntraineur"))
+            total_penalties = _safe_int(row.get("penalites"))
+            points_for = _safe_int(row.get("paniersMarques"))
+            points_against = _safe_int(row.get("paniersEncaisses"))
+            points_diff = _safe_int(row.get("difference"))
+            quotient = row.get("quotient")
 
             standing_url = _build_team_url(club_code, row_engagement_id)
 
@@ -551,6 +565,16 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
                 "played": played,
                 "won": won,
                 "lost": lost,
+                "draws": draws,
+                "forfeits": forfeits,
+                "defaults": defaults,
+                "referee_penalties": referee_penalties,
+                "coach_penalties": coach_penalties,
+                "total_penalties": total_penalties,
+                "points_for": points_for,
+                "points_against": points_against,
+                "points_diff": points_diff,
+                "quotient": quotient,
                 "url": standing_url,
                 "team_url": standing_url,
             }
