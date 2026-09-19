@@ -1,0 +1,192 @@
+blueprint:
+  name: FFBB Tracker - Notifications Telegram
+  description: >-
+    Rappel de veille, alertes de modification et boutons interactifs Telegram
+    (Actualiser, Maps, Waze) pour une équipe FFBB Tracker.
+  domain: automation
+  input:
+    next_match_date_sensor:
+      name: Capteur Date du prochain match
+      selector:
+        entity:
+          filter:
+            integration: ffbb_tracker
+            domain: sensor
+            device_class: timestamp
+    next_match_opponent_sensor:
+      name: Capteur Adversaire du prochain match
+      selector:
+        entity:
+          filter:
+            integration: ffbb_tracker
+            domain: sensor
+    next_match_location_sensor:
+      name: Capteur Lieu du prochain match
+      selector:
+        entity:
+          filter:
+            integration: ffbb_tracker
+            domain: sensor
+    refresh_button:
+      name: Bouton d'actualisation FFBB
+      selector:
+        entity:
+          filter:
+            integration: ffbb_tracker
+            domain: button
+    notify_entity:
+      name: Entité Telegram Notify
+      description: Entité notify du bot Telegram (ex. notify.telegram_basket).
+      selector:
+        entity:
+          filter:
+            integration: telegram_bot
+            domain: notify
+    team_title:
+      name: Nom affiché de l'équipe (optionnel)
+      description: Laisser vide pour utiliser le nom configuré dans l'appareil FFBB.
+      default: ""
+      selector:
+        text: {}
+    refresh_command:
+      name: Commande de callback Telegram
+      description: Identifiant unique (ex. /refresh_u13m, /refresh_sf4). Doit commencer par un slash et être différent pour chaque équipe suivie.
+      default: "/refresh_match"
+      selector:
+        text: {}
+    reminder_time:
+      name: Heure du rappel de la veille
+      default: "19:00:00"
+      selector:
+        time: {}
+
+mode: restart
+max_exceeded: silent
+
+variables:
+  team_title_input: !input team_title
+  date_sensor: !input next_match_date_sensor
+  opponent_sensor: !input next_match_opponent_sensor
+  location_sensor: !input next_match_location_sensor
+  refresh_cmd: !input refresh_command
+  team_title_raw: >-
+    {% if team_title_input | trim != '' %}
+      {{ team_title_input }}
+    {% else %}
+      {% set dev_id = device_id(date_sensor) %}
+      {{ device_attr(dev_id, 'name') if dev_id else 'Match de basket' }}
+    {% endif %}
+  # HTML-escaped for parse_mode: html below -- team/competition names come
+  # from the FFBB API and can contain &, <, > (club names, sponsors...),
+  # which would otherwise break or truncate the Telegram message.
+  team_title: >-
+    {{ team_title_raw | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') }}
+
+triggers:
+  - trigger: time
+    at: !input reminder_time
+    id: rappel_veille
+  - trigger: state
+    entity_id:
+      - !input next_match_date_sensor
+      - !input next_match_location_sensor
+      - !input next_match_opponent_sensor
+    id: alerte_ffbb
+  - trigger: event
+    event_type: telegram_callback
+    event_data:
+      data: !input refresh_command
+    id: callback_refresh
+
+conditions: []
+
+actions:
+  - if:
+      - condition: trigger
+        id: callback_refresh
+    then:
+      - action: telegram_bot.answer_callback_query
+        data:
+          callback_query_id: "{{ trigger.event.data.id }}"
+          message: "🔄 Actualisation FFBB en cours..."
+      - action: button.press
+        target:
+          entity_id: !input refresh_button
+      - delay: "00:00:02"
+
+  - if:
+      - condition: trigger
+        id: alerte_ffbb
+    then:
+      - delay: "00:00:02"
+
+  - condition: template
+    value_template: >-
+      {% if trigger is not defined or trigger.id is not defined %}
+        true
+      {% elif trigger.id == 'callback_refresh' %}
+        true
+      {% elif trigger.id == 'rappel_veille' %}
+        {% set match_dt = as_datetime(states(date_sensor), default=none) %}
+        {{ match_dt is not none and match_dt.astimezone().date() == (now().date() + timedelta(days=1)) }}
+      {% elif trigger.id == 'alerte_ffbb' %}
+        {{ trigger.from_state is not none and
+           trigger.to_state is not none and
+           trigger.to_state.state not in ['unknown', 'unavailable', ''] and
+           trigger.from_state.state != trigger.to_state.state }}
+      {% else %}
+        false
+      {% endif %}
+
+  - action: telegram_bot.send_message
+    data:
+      entity_id: !input notify_entity
+      parse_mode: html
+      disable_web_page_preview: true
+      message: |-
+        {%- set dt = as_datetime(states(date_sensor), default=none) -%}
+        {%- set days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'] -%}
+        {%- set months = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'] -%}
+        {%- set lieu = states(location_sensor) -%}
+        {%- set lieu_html = lieu | title | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') -%}
+        {%- set opponent_html = states(opponent_sensor) | title | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') -%}
+        {%- set is_home = state_attr(location_sensor, 'is_home') -%}
+        {%- set map_search_url = 'https://www.google.com/maps/search/?api=1&query=' ~ (lieu | urlencode) -%}
+        {%- if trigger is defined and trigger.id is defined and trigger.id == 'alerte_ffbb' -%}
+          {%- if trigger.from_state is not none and trigger.from_state.state not in ['unknown', 'unavailable', ''] -%}
+            {%- set statut = '⚠️ <b>Mise à jour du match</b>' -%}
+          {%- else -%}
+            {%- set statut = '📢 <b>Nouveau match programmé</b>' -%}
+          {%- endif -%}
+        {%- else -%}
+          {%- if dt is not none -%}
+            {%- set delta = (dt.astimezone().date() - now().date()).days -%}
+            {%- set statut = '🔥 <b>Match aujourd\'hui !</b>' if delta == 0 else ('🔥 <b>Match demain !</b>' if delta == 1 else ('⏳ <b>Match dans ' ~ delta ~ ' jours !</b>' if delta > 1 else '🏀 <b>Prochain match</b>')) -%}
+          {%- else -%}
+            {%- set statut = '🏀 <b>Prochain match</b>' -%}
+          {%- endif -%}
+        {%- endif -%}
+        🏀 <b>{{ team_title }}</b>
+
+        {{ statut }}
+
+        👥 <b>Adversaire :</b> {{ opponent_html }}
+        📅 <b>Date :</b> {% if dt is not none %}{{ days[dt.weekday()] }} {{ dt.day }} {{ months[dt.month - 1] }}{% else %}Date inconnue{% endif %}
+        ⏰ <b>Coup d'envoi :</b> {% if dt is not none %}{{ dt.strftime('%Hh%M') }}{% else %}Inconnu{% endif %}
+        🏟️ <b>Terrain :</b> {% if is_home %}🏠 Domicile{% else %}🚗 Extérieur{% endif %}
+        📍 <b>Lieu :</b> {{ lieu_html if has_value(location_sensor) else 'Non renseigné' }}{% if has_value(location_sensor) %} <a href="{{ map_search_url | replace('&', '&amp;') }}">🗺️</a>{% endif %}
+      inline_keyboard: >-
+        {% set gmaps = state_attr(location_sensor, 'google_maps_url') | default('', true) %}
+        {# waze_url from the sensor is already built on www.waze.com (see sensor.py);
+           only the literal-'+' guard against addresses containing a '+' character
+           is still needed here (quote() leaves '+' unescaped, which some Waze
+           versions misread as a space). #}
+        {% set waze_clean = state_attr(location_sensor, 'waze_url') | default('', true) | replace('+', '%20') %}
+        {% set buttons = [ ['🔄 Actualiser', refresh_cmd] ] %}
+        {% if gmaps.startswith('http') %}
+          {% set buttons = buttons + [ ['🗺️ Maps', gmaps] ] %}
+        {% endif %}
+        {% if waze_clean.startswith('http') %}
+          {% set buttons = buttons + [ ['🚗 Waze', waze_clean] ] %}
+        {% endif %}
+        {{ [buttons] }}

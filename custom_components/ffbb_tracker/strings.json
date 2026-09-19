@@ -1,0 +1,224 @@
+{
+  "title": "FFBB Tracker",
+  "config": {
+    "step": {
+      "user": {
+        "title": "FFBB Tracker",
+        "description": "Enter a club name, city, team URL, or team ID.",
+        "data": {
+          "search_query": "Club, city, team URL, or team ID"
+        }
+      },
+      "club": {
+        "title": "Select Club",
+        "description": "Choose your club from the results.",
+        "data": {
+          "club_id": "Club"
+        }
+      },
+      "team": {
+        "title": "Select Team",
+        "description": "Choose the team to track.",
+        "data": {
+          "engagement_id": "Team"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the FFBB API.",
+      "no_clubs_found": "No clubs found for this search.",
+      "no_teams_found": "No teams found for this club.",
+      "invalid_engagement": "Invalid team URL or engagement ID.",
+      "no_poule_found": "No pool found for this team.",
+      "query_too_short": "Please enter at least 2 characters.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "This team is already configured.",
+      "club_not_found": "Club not found.",
+      "reconfigure_successful": "Reconfiguration successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "FFBB Tracker Options",
+        "description": "Configure update polling intervals and optionally enable faster polling around match times to get scores sooner.",
+        "data": {
+          "scan_interval": "Standard update interval (minutes)",
+          "live_polling": "Faster polling on match days",
+          "live_scan_interval": "Live update interval (minutes)",
+          "live_window_after_hours": "Post-match score wait window (hours)"
+        },
+        "data_description": {
+          "scan_interval": "Check frequency outside match windows (15 to 1440 min).",
+          "live_polling": "Automatically switches to a shorter interval around match times.",
+          "live_scan_interval": "Check frequency in fast polling mode (2 to 15 min).",
+          "live_window_after_hours": "Duration of fast polling mode after kickoff (1 to 6 h)."
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "game_day": {
+        "name": "Game day",
+        "state": {
+          "off": "No",
+          "on": "Yes"
+        }
+      },
+      "match_in_progress": {
+        "name": "Match in progress",
+        "state": {
+          "off": "No",
+          "on": "Live"
+        }
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Refresh"
+      }
+    },
+    "calendar": {
+      "schedule": {
+        "name": "Schedule",
+        "state": {
+          "off": "No match",
+          "on": "In progress"
+        }
+      }
+    },
+    "event": {
+      "match_finished": {
+        "name": "Match finished",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "win": "Win",
+              "loss": "Loss",
+              "draw": "Draw"
+            }
+          }
+        }
+      },
+      "rank_changed": {
+        "name": "Rank change",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "up": "Promotion",
+              "down": "Relegation"
+            }
+          }
+        }
+      }
+    },
+    "sensor": {
+      "next_match_date": {
+        "name": "Next match: Date"
+      },
+      "next_match_opponent": {
+        "name": "Next match: Opponent"
+      },
+      "next_match_venue_type": {
+        "name": "Next match: Venue",
+        "state": {
+          "home": "Home",
+          "away": "Away"
+        }
+      },
+      "next_match_location": {
+        "name": "Next match: Location"
+      },
+      "last_match_date": {
+        "name": "Last match: Date"
+      },
+      "last_match_opponent": {
+        "name": "Last match: Opponent"
+      },
+      "last_match_result": {
+        "name": "Last match: Result",
+        "state": {
+          "win": "Win",
+          "loss": "Loss",
+          "draw": "Draw"
+        }
+      },
+      "last_match_score": {
+        "name": "Last match: Score"
+      },
+      "rank": {
+        "name": "Rank"
+      },
+      "rank_evolution": {
+        "name": "Rank evolution"
+      },
+      "poule": {
+        "name": "Pool"
+      },
+      "form": {
+        "name": "Recent form"
+      }
+    }
+  },
+  "issues": {
+    "season_rollover": {
+      "title": "FFBB Tracker: Team not found",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Search for \"{team_name}\" again",
+            "description": "The team \"{team_name}\" has been unavailable on the FFBB API for several days. This typically occurs during season rollovers when the FFBB assigns new engagement and pool IDs. This will open the team search so you can find \"{team_name}\" under its new engagement and pool IDs for this season."
+          }
+        }
+      }
+    },
+    "token_refresh_failing": {
+      "title": "FFBB Tracker: Public token refresh failing",
+      "description": "Updates for \"{team_name}\" are still working thanks to a fallback token, but the automatic refresh of the FFBB public API token has failed several times in a row. This may mean the FFBB has changed its `competitions.ffbb.com` API and this integration will need an update. Consider checking for a newer release, or opening an issue on GitHub if this persists."
+    }
+  },
+  "exceptions": {
+    "entry_not_found": {
+      "message": "No team matches the config entry \"{entry_id}\". Verify the identifier or omit it to target all tracked teams."
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Refresh data",
+      "description": "Forces an immediate coordinator update for FFBB teams.",
+      "fields": {
+        "entry_id": {
+          "name": "Config entry",
+          "description": "Specific config entry to refresh. If omitted, all teams are updated."
+        }
+      }
+    },
+    "get_next_matches": {
+      "name": "Get next matches",
+      "description": "Returns upcoming matches for use in automations or scripts.",
+      "fields": {
+        "entry_id": {
+          "name": "Config entry",
+          "description": "Specific config entry to target."
+        },
+        "limit": {
+          "name": "Limit",
+          "description": "Number of matches to return."
+        }
+      }
+    },
+    "get_standings": {
+      "name": "Get pool standings",
+      "description": "Returns the complete pool standings table.",
+      "fields": {
+        "entry_id": {
+          "name": "Config entry",
+          "description": "Specific config entry to target."
+        }
+      }
+    }
+  }
+}

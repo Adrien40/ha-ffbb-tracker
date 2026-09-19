@@ -1,0 +1,266 @@
+blueprint:
+  name: FFBB Tracker - Résultat de match (Telegram)
+  description: >-
+    Envoie une notification Telegram dès qu'un nouveau résultat de match est
+    publié (victoire, défaite ou match nul), avec l'adversaire, le score,
+    l'écart de points, la journée, la salle, et la série en cours. Se base sur
+    l'entité "Fin de match" (event.*_match_finished) de FFBB Tracker avec
+    structure visible en permanence.
+  domain: automation
+  input:
+    match_finished_event:
+      name: Entité "Fin de match"
+      description: >-
+        Choisir l'entité event se terminant par "_match_finished" (traduite "Fin
+        de match" dans l'interface).
+      selector:
+        entity:
+          filter:
+            - integration: ffbb_tracker
+              domain:
+                - event
+          multiple: false
+          reorder: false
+    refresh_button:
+      name: Bouton d'actualisation FFBB
+      description: >-
+        Le bouton "Actualiser" de la même équipe FFBB Tracker, pressé
+        automatiquement au clic sur le bouton Telegram.
+      selector:
+        entity:
+          filter:
+            - integration: ffbb_tracker
+              domain:
+                - button
+          multiple: false
+          reorder: false
+    notify_entity:
+      name: Entité Telegram Notify
+      description: Entité notify du bot Telegram (ex. notify.telegram_basket).
+      selector:
+        entity:
+          filter:
+            - integration: telegram_bot
+              domain: notify
+          multiple: false
+          reorder: false
+    team_title:
+      name: Nom affiché de l'équipe (optionnel)
+      description: Laisser vide pour utiliser le nom configuré dans l'appareil FFBB.
+      default: ""
+      selector:
+        text:
+          multiline: false
+          multiple: false
+    notify_non_win_results:
+      name: Notifier aussi en cas de défaite ou de match nul
+      description: Si désactivé, seules les victoires génèrent une notification.
+      default: true
+      selector:
+        boolean: {}
+    refresh_command:
+      name: Commande de callback Telegram
+      description: >-
+        Identifiant unique (ex. /refresh_result_u13m). Doit commencer par un
+        slash et être différent de toute autre commande de callback.
+      default: /refresh_result
+      selector:
+        text:
+          multiline: false
+          multiple: false
+  source_url: https://github.com/Adrien40/ha-ffbb-tracker/blob/main/blueprints/automation/ffbb_tracker/match_result_notification_telegram.yaml
+
+mode: restart
+max_exceeded: silent
+
+variables:
+  team_title_input: !input team_title
+  event_entity: !input match_finished_event
+  notify_non_win_results: !input notify_non_win_results
+  refresh_cmd: !input refresh_command
+  team_title_raw: >-
+    {% if team_title_input | trim != '' %}
+      {{ team_title_input }}
+    {% else %}
+      {% set dev_id = device_id(event_entity) %}
+      {{ device_attr(dev_id, 'name') if dev_id else 'FFBB Tracker' }}
+    {% endif %}
+  # HTML-escaped for parse_mode: html below -- team/competition names come
+  # from the FFBB API and can contain &, <, > (club names, sponsors...),
+  # which would otherwise break or truncate the Telegram message.
+  team_title: >-
+    {{ team_title_raw | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') }}
+
+triggers:
+  - trigger: state
+    entity_id: !input match_finished_event
+    id: match_finished
+  - trigger: event
+    event_type: telegram_callback
+    event_data:
+      data: !input refresh_command
+    id: callback_refresh
+
+conditions: []
+
+actions:
+  - if:
+      - condition: trigger
+        id: callback_refresh
+    then:
+      - action: telegram_bot.answer_callback_query
+        data:
+          callback_query_id: "{{ trigger.event.data.id }}"
+          message: "🔄 Actualisation FFBB en cours..."
+      - action: button.press
+        target:
+          entity_id: !input refresh_button
+      - delay: "00:00:02"
+
+  - condition: template
+    value_template: >-
+      {% if trigger is not defined or trigger.id is not defined %}
+        true
+      {% elif trigger.id == 'callback_refresh' %}
+        true
+      {% else %}
+        {{ trigger.from_state is not none and
+           trigger.to_state is not none and
+           trigger.to_state.attributes.event_type in ['win', 'loss', 'draw'] and
+           (trigger.to_state.attributes.event_type == 'win' or notify_non_win_results) }}
+      {% endif %}
+
+  - action: telegram_bot.send_message
+    data:
+      entity_id: !input notify_entity
+      parse_mode: html
+      message: |-
+        {%- set dev_id = device_id(event_entity) -%}
+        {%- set dev_ents = device_entities(dev_id) if dev_id else [] -%}
+        {%- set ns = namespace(
+          last_date='',
+          last_result='',
+          last_score='',
+          last_opponent='',
+          form=''
+        ) -%}
+        {%- for e in dev_ents -%}
+          {%- if 'forme' in e or 'form' in e or state_attr(e, 'current_streak') is not none -%}
+            {%- set ns.form = e -%}
+          {%- elif ('date' in e and ('dernier' in e or 'last' in e)) or (state_attr(e, 'round') is not none and state_attr(e, 'gym_address') is none) -%}
+            {%- set ns.last_date = e -%}
+          {%- elif ('resultat' in e or 'result' in e) and ('dernier' in e or 'last' in e) -%}
+            {%- set ns.last_result = e -%}
+          {%- elif ('score' in e and ('dernier' in e or 'last' in e)) or state_attr(e, 'team_score') is not none -%}
+            {%- set ns.last_score = e -%}
+          {%- elif ('adversaire' in e or 'opponent' in e or 'equipe' in e) and ('dernier' in e or 'last' in e) -%}
+            {%- set ns.last_opponent = e -%}
+          {%- endif -%}
+        {%- endfor -%}
+
+        {# 1. Résultat #}
+        {%- set event_type = state_attr(event_entity, 'event_type') -%}
+        {%- if not event_type and ns.last_result -%}
+          {%- set event_type = states(ns.last_result) if states(ns.last_result) in ['win', 'loss', 'draw'] else none -%}
+        {%- endif -%}
+
+        {# 2. Adversaire #}
+        {%- set opponent = state_attr(event_entity, 'opponent') -%}
+        {%- if not opponent and ns.last_opponent -%}
+          {%- set opponent = states(ns.last_opponent) if states(ns.last_opponent) not in ['unknown', 'unavailable', ''] else none -%}
+        {%- endif -%}
+        {%- set opponent = opponent or "Non renseigné" -%}
+
+        {# 3. Scores #}
+        {%- set team_score = state_attr(event_entity, 'team_score') -%}
+        {%- set opponent_score = state_attr(event_entity, 'opponent_score') -%}
+        {%- if team_score is none and ns.last_score -%}
+          {%- if state_attr(ns.last_score, 'team_score') is not none -%}
+            {%- set team_score = state_attr(ns.last_score, 'team_score') -%}
+            {%- set opponent_score = state_attr(ns.last_score, 'opponent_score') -%}
+          {%- elif '-' in states(ns.last_score) -%}
+            {%- set score_parts = states(ns.last_score).split('-') -%}
+            {%- set team_score = score_parts[0] | trim -%}
+            {%- set opponent_score = score_parts[1] | trim -%}
+          {%- endif -%}
+        {%- endif -%}
+
+        {# 4. Différentiel et statut #}
+        {%- set point_difference = state_attr(event_entity, 'point_difference') -%}
+        {%- if point_difference is none and team_score is not none and opponent_score is not none -%}
+          {%- set point_difference = (team_score | int(0)) - (opponent_score | int(0)) -%}
+        {%- endif -%}
+        {%- set diff_str = '' -%}
+        {%- if point_difference is not none -%}
+          {%- set diff_str = ' (+' ~ point_difference ~ ')' if point_difference > 0 else (' (' ~ point_difference ~ ')' if point_difference < 0 else ' (0)') -%}
+        {%- endif -%}
+
+        {%- if event_type == 'win' -%}
+          {%- set statut = '🏆 <b>Victoire !' ~ diff_str ~ '</b>' -%}
+        {%- elif event_type == 'loss' -%}
+          {%- set statut = '😞 <b>Défaite' ~ diff_str ~ '</b>' -%}
+        {%- elif event_type == 'draw' -%}
+          {%- set statut = '🤝 <b>Match nul</b>' -%}
+        {%- else -%}
+          {%- set statut = '📊 <b>Résultat en attente</b>' -%}
+        {%- endif -%}
+
+        {# 5. Terrain #}
+        {%- set is_home = state_attr(event_entity, 'is_home') -%}
+        {%- if is_home is none and ns.last_date -%}
+          {%- set is_home = state_attr(ns.last_date, 'is_home') -%}
+        {%- endif -%}
+        {%- if is_home in [true, 'true', 'True'] -%}
+          {%- set terrain_str = '🏠 Domicile' -%}
+        {%- elif is_home in [false, 'false', 'False'] -%}
+          {%- set terrain_str = '🚗 Extérieur' -%}
+        {%- else -%}
+          {%- set terrain_str = 'Non renseigné' -%}
+        {%- endif -%}
+
+        {# 6. Date #}
+        {%- set raw_date = state_attr(event_entity, 'match_date') -%}
+        {%- if not raw_date and ns.last_date -%}
+          {%- set raw_date = states(ns.last_date) if states(ns.last_date) not in ['unknown', 'unavailable', ''] else none -%}
+        {%- endif -%}
+        {%- set dt = as_datetime(raw_date, default=none) if raw_date else none -%}
+        {%- set days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'] -%}
+        {%- set months = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'] -%}
+        {%- set date_str = (days[dt.weekday()] ~ ' ' ~ dt.day ~ ' ' ~ months[dt.month - 1] ~ ' à ' ~ dt.strftime('%Hh%M')) if dt is not none else 'Date inconnue' -%}
+
+        {# 7. Journée et Salle #}
+        {%- set round_num = state_attr(event_entity, 'round') -%}
+        {%- if not round_num and ns.last_date -%}
+          {%- set round_num = state_attr(ns.last_date, 'round') -%}
+        {%- endif -%}
+        {%- set round_str = 'Journée ' ~ round_num if round_num else 'Journée non renseignée' -%}
+
+        {%- set gym_name = state_attr(event_entity, 'gym_name') -%}
+        {%- set gym_city = state_attr(event_entity, 'gym_city') -%}
+        {%- if not gym_name and ns.last_date -%}
+          {%- set gym_name = state_attr(ns.last_date, 'gym_name') -%}
+          {%- set gym_city = state_attr(ns.last_date, 'gym_city') -%}
+        {%- endif -%}
+        {%- set gym_info = (gym_name ~ (', ' ~ gym_city if gym_city else '')) if gym_name else none -%}
+        {%- set gym_str_raw = gym_info | title if gym_info else 'Salle non renseignée' -%}
+        {%- set gym_str = gym_str_raw | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') -%}
+        {%- set opponent_html = (opponent | title) | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') -%}
+
+        {# 8. Série et Forme #}
+        {%- set streak = state_attr(ns.form, 'current_streak') if ns.form else none -%}
+        {%- set streak_str = streak if streak else 'Non renseignée' -%}
+        {%- set form_val = states(ns.form) if ns.form else none -%}
+        {%- set form_str = form_val if (form_val and form_val not in ['unknown', 'unavailable', '']) else 'En attente' -%}
+
+        🏀 <b>{{ team_title }}</b>
+
+        {{ statut }}
+
+        👥 <b>Adversaire :</b> {{ opponent_html }}
+        🔢 <b>Score :</b> {% if team_score is not none and opponent_score is not none %}{{ team_score }} - {{ opponent_score }}{% else %}Non communiqué{% endif %}
+        📅 <b>Date :</b> {{ date_str }} ({{ round_str }})
+        🏟️ <b>Terrain :</b> {{ terrain_str }} ({{ gym_str }})
+        🔥 <b>Série :</b> {{ streak_str }} (Forme : {{ form_str }})
+      inline_keyboard: >-
+        {% set buttons = [ ['🔄 Actualiser', refresh_cmd] ] %}
+        {{ [buttons] }}
