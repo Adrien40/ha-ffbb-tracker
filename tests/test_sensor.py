@@ -426,6 +426,7 @@ def test_poule_sensor_calendar_formats_home_and_away_matches(hass):
     Away matches invert home_team to opponent and score as opponent - team.
     Unplayed matches expose score as None.
     Round numbers are safely parsed to integers or fallback to strings.
+    Logos, URLs and gym venues are accurately mapped according to venue type.
     """
     coordinator = _make_coordinator(hass)
 
@@ -437,9 +438,16 @@ def test_poule_sensor_calendar_formats_home_and_away_matches(hass):
         is_home=True,
         team_name="Basket Landes",
         opponent_name="US Mont-de-Marsan",
+        team_logo_url="https://api.ffbb.app/assets/landes.png",
+        opponent_logo_url="https://api.ffbb.app/assets/mdm.png",
+        team_url="https://ffbb.com/landes",
+        opponent_url="https://ffbb.com/mdm",
+        gym_name="Espace Francois Mitterrand",
+        gym_city="Mont-de-Marsan",
         is_played=True,
         team_score=82,
         opponent_score=74,
+        result="win",
     )
 
     played_away = _make_match(
@@ -450,9 +458,14 @@ def test_poule_sensor_calendar_formats_home_and_away_matches(hass):
         is_home=False,
         team_name="Basket Landes",
         opponent_name="AS Dax",
+        team_logo_url="https://api.ffbb.app/assets/landes.png",
+        opponent_logo_url="https://api.ffbb.app/assets/dax.png",
+        gym_name="Salle Maurice Boyau",
+        gym_city="Dax",
         is_played=True,
         team_score=70,
         opponent_score=65,
+        result="win",
     )
 
     unplayed_away = _make_match(
@@ -494,15 +507,24 @@ def test_poule_sensor_calendar_formats_home_and_away_matches(hass):
     assert calendar[0]["match_number"] == "101"
     assert calendar[0]["home_team"] == "Basket Landes"
     assert calendar[0]["away_team"] == "US Mont-de-Marsan"
+    assert calendar[0]["home_logo"] == "https://api.ffbb.app/assets/landes.png"
+    assert calendar[0]["away_logo"] == "https://api.ffbb.app/assets/mdm.png"
+    assert calendar[0]["home_url"] == "https://ffbb.com/landes"
+    assert calendar[0]["away_url"] == "https://ffbb.com/mdm"
+    assert calendar[0]["gym_name"] == "Espace Francois Mitterrand"
     assert calendar[0]["score"] == "82 - 74"
     assert calendar[0]["is_played"] is True
+    assert calendar[0]["result"] == "win"
     assert calendar[0]["date"] == "2026-09-12T20:00:00+00:00"
 
-    # 2. Played Away Match (teams and scores inverted)
+    # 2. Played Away Match (teams, logos and scores inverted)
     assert calendar[1]["round"] == 2
     assert calendar[1]["match_number"] == "102"
     assert calendar[1]["home_team"] == "AS Dax"
     assert calendar[1]["away_team"] == "Basket Landes"
+    assert calendar[1]["home_logo"] == "https://api.ffbb.app/assets/dax.png"
+    assert calendar[1]["away_logo"] == "https://api.ffbb.app/assets/landes.png"
+    assert calendar[1]["gym_name"] == "Salle Maurice Boyau"
     assert calendar[1]["score"] == "65 - 70"
     assert calendar[1]["is_played"] is True
     assert calendar[1]["date"] == "2026-09-19T20:00:00+00:00"
