@@ -572,7 +572,7 @@ class FFBBRankEvolutionSensor(FFBBSensorBase, RestoreSensor):
 
 
 class FFBBPouleSensor(FFBBSensorBase):
-    """Sensor displaying the assigned pool name."""
+    """Sensor displaying the assigned pool name and season schedule."""
 
     _attr_translation_key = "poule"
 
@@ -589,14 +589,46 @@ class FFBBPouleSensor(FFBBSensorBase):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return competition details."""
+        """Return competition details and full season calendar."""
         if not self.coordinator.data:
             return {}
+
+        calendar_matches: list[dict[str, Any]] = []
+        for match in self.coordinator.data.fixtures:
+            is_home = match.is_home
+            home_team = match.team_name if is_home else match.opponent_name
+            away_team = match.opponent_name if is_home else match.team_name
+
+            score: str | None = None
+            if (
+                match.is_played
+                and match.team_score is not None
+                and match.opponent_score is not None
+            ):
+                if is_home:
+                    score = f"{match.team_score} - {match.opponent_score}"
+                else:
+                    score = f"{match.opponent_score} - {match.team_score}"
+
+            calendar_matches.append(
+                {
+                    "round": _safe_int_value(match.round_number) or match.round_number,
+                    "match_number": match.match_number,
+                    "home_team": home_team,
+                    "away_team": away_team,
+                    "date": (
+                        match.match_date.isoformat() if match.match_date else None
+                    ),
+                    "score": score,
+                    "is_played": match.is_played,
+                }
+            )
 
         return {
             "competition": self.coordinator.data.competition_name,
             "team": self.coordinator.data.team_name,
             "url": f"https://competitions.ffbb.com/poule/{self.coordinator.poule_id}",
+            "calendar": calendar_matches,
         }
 
 
