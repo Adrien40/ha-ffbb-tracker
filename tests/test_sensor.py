@@ -390,8 +390,13 @@ def test_last_match_result_sensor_none_before_any_match_played(hass):
     assert sensor.native_value is None
 
 
+# ---------------------------------------------------------------------------
+# FFBBPouleSensor: pool metadata and complete calendar extraction
+# ---------------------------------------------------------------------------
+
+
 def test_poule_sensor_reports_name_and_attrs(hass):
-    """native_value returns the pool name; attrs expose competition/team."""
+    """native_value returns the pool name; attrs expose competition/team/calendar."""
     coordinator = _make_coordinator(hass)
     coordinator.data = _make_team_data(poule_name="Excellence - Poule A")
     sensor = FFBBPouleSensor(coordinator)
@@ -403,6 +408,7 @@ def test_poule_sensor_reports_name_and_attrs(hass):
         sensor.extra_state_attributes["url"]
         == "https://competitions.ffbb.com/poule/poule-1"
     )
+    assert sensor.extra_state_attributes["calendar"] == []
 
 
 def test_poule_sensor_none_before_first_refresh(hass):
@@ -411,6 +417,110 @@ def test_poule_sensor_none_before_first_refresh(hass):
 
     assert sensor.native_value is None
     assert sensor.extra_state_attributes == {}
+
+
+def test_poule_sensor_calendar_formats_home_and_away_matches(hass):
+    """Verify calendar formatting for home vs away, played vs unplayed matches.
+
+    Home matches keep home_team as the tracked team and score as team - opponent.
+    Away matches invert home_team to opponent and score as opponent - team.
+    Unplayed matches expose score as None.
+    Round numbers are safely parsed to integers or fallback to strings.
+    """
+    coordinator = _make_coordinator(hass)
+
+    played_home = _make_match(
+        match_id="m1",
+        match_number="101",
+        round_number="1",
+        match_date=datetime(2026, 9, 12, 20, 0, tzinfo=UTC),
+        is_home=True,
+        team_name="Basket Landes",
+        opponent_name="US Mont-de-Marsan",
+        is_played=True,
+        team_score=82,
+        opponent_score=74,
+    )
+
+    played_away = _make_match(
+        match_id="m2",
+        match_number="102",
+        round_number="2",
+        match_date=datetime(2026, 9, 19, 20, 0, tzinfo=UTC),
+        is_home=False,
+        team_name="Basket Landes",
+        opponent_name="AS Dax",
+        is_played=True,
+        team_score=70,
+        opponent_score=65,
+    )
+
+    unplayed_away = _make_match(
+        match_id="m3",
+        match_number="103",
+        round_number="3",
+        match_date=datetime(2026, 9, 26, 20, 0, tzinfo=UTC),
+        is_home=False,
+        team_name="Basket Landes",
+        opponent_name="Elan Bearnais",
+        is_played=False,
+        team_score=None,
+        opponent_score=None,
+    )
+
+    unplayed_no_date = _make_match(
+        match_id="m4",
+        match_number="104",
+        round_number="Finale",
+        match_date=None,
+        is_home=True,
+        team_name="Basket Landes",
+        opponent_name="TBD",
+        is_played=False,
+        team_score=None,
+        opponent_score=None,
+    )
+
+    coordinator.data = _make_team_data(
+        fixtures=[played_home, played_away, unplayed_away, unplayed_no_date]
+    )
+    sensor = FFBBPouleSensor(coordinator)
+    calendar = sensor.extra_state_attributes["calendar"]
+
+    assert len(calendar) == 4
+
+    # 1. Played Home Match
+    assert calendar[0]["round"] == 1
+    assert calendar[0]["match_number"] == "101"
+    assert calendar[0]["home_team"] == "Basket Landes"
+    assert calendar[0]["away_team"] == "US Mont-de-Marsan"
+    assert calendar[0]["score"] == "82 - 74"
+    assert calendar[0]["is_played"] is True
+    assert calendar[0]["date"] == "2026-09-12T20:00:00+00:00"
+
+    # 2. Played Away Match (teams and scores inverted)
+    assert calendar[1]["round"] == 2
+    assert calendar[1]["match_number"] == "102"
+    assert calendar[1]["home_team"] == "AS Dax"
+    assert calendar[1]["away_team"] == "Basket Landes"
+    assert calendar[1]["score"] == "65 - 70"
+    assert calendar[1]["is_played"] is True
+    assert calendar[1]["date"] == "2026-09-19T20:00:00+00:00"
+
+    # 3. Unplayed Away Match (no score)
+    assert calendar[2]["round"] == 3
+    assert calendar[2]["home_team"] == "Elan Bearnais"
+    assert calendar[2]["away_team"] == "Basket Landes"
+    assert calendar[2]["score"] is None
+    assert calendar[2]["is_played"] is False
+    assert calendar[2]["date"] == "2026-09-26T20:00:00+00:00"
+
+    # 4. Non-numeric round and missing date
+    assert calendar[3]["round"] == "Finale"
+    assert calendar[3]["home_team"] == "Basket Landes"
+    assert calendar[3]["away_team"] == "TBD"
+    assert calendar[3]["score"] is None
+    assert calendar[3]["date"] is None
 
 
 # ---------------------------------------------------------------------------
