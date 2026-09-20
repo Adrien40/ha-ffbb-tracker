@@ -50,7 +50,7 @@ Si ce projet vous est utile, vous pouvez soutenir son développement 🙏
 </p>
 
 <p align="center">
-  <em>📊 Vue d’ensemble des données dans Home Assistant</em>
+  <em>📊 Vue d’ensemble avec la carte Lovelace [FFBB Tracker Card](https://github.com/Adrien40/ha-ffbb-tracker-card)</em>
 </p>
 
 ### 🔍 Aperçu des entités
