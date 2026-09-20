@@ -46,7 +46,7 @@ Si ce projet vous est utile, vous pouvez soutenir son développement 🙏
 ### 📊 Visualisation
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Adrien40/ha-ffbb-tracker/main/docs/screenshots/dashboard_overview.png" width="500">
+  <img src="https://raw.githubusercontent.com/Adrien40/ha-ffbb-tracker-card/main/docs/screenshots/dashboard_overview.png" width="500">
 </p>
 
 <p align="center">
