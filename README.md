@@ -42,6 +42,16 @@ If you find this project useful, you can support its development 🙏
 
 ## 📸 Preview in Home Assistant
 
+### 📊 Overview
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Adrien40/ha-ffbb-tracker-card/refs/heads/main/docs/screenshots/card_preview.gif" width="500">
+</p>
+
+<p align="center">
+  <em>📊 Overview with the <a href="https://github.com/Adrien40/ha-ffbb-tracker-card">FFBB Tracker Card</a> Lovelace card</em>
+</p>
+
 ### 🔍 Entities Overview
 <p align="center">
   <img src="https://raw.githubusercontent.com/Adrien40/ha-ffbb-tracker/refs/heads/main/docs/screenshots/entities_overview.png" width="600" alt="Entities Overview">
