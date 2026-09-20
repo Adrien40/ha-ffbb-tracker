@@ -50,7 +50,7 @@ Si ce projet vous est utile, vous pouvez soutenir son développement 🙏
 </p>
 
 <p align="center">
-  <em>📊 Vue d’ensemble avec la carte Lovelace [FFBB Tracker Card](https://github.com/Adrien40/ha-ffbb-tracker-card)</em>
+  <em>📊 Vue d’ensemble avec la carte Lovelace <a href="https://github.com/Adrien40/ha-ffbb-tracker-card">FFBB Tracker Card</a></em>
 </p>
 
 ### 🔍 Aperçu des entités
