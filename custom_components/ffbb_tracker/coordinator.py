@@ -436,26 +436,38 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
         poule_name = data.get("nom", "")
         raw_matches = data.get("rencontres") or []
         raw_standings = data.get("classements") or []
+        base_url = self.client.base_url if self.client else None
 
         engagement_to_code: dict[str, str] = {}
+        # Same fallback as engagement_to_code below: a classement row's own
+        # idEngagement.idOrganisme sometimes lacks (or flattens away) the
+        # nested org dict a logo id lives in, so this is built from the
+        # rencontres' org objects -- which always carry it when the club
+        # has one registered -- and consulted only when the row itself
+        # doesn't have it.
+        engagement_to_logo: dict[str, str] = {}
         for match in raw_matches:
             raw_org1 = match.get("idOrganismeEquipe1")
-            if isinstance(raw_org1, dict) and raw_org1.get("code"):
+            if isinstance(raw_org1, dict):
                 eng1 = match.get("idEngagementEquipe1")
                 eng1_id = str(
                     eng1.get("id", "") if isinstance(eng1, dict) else eng1 or ""
                 )
-                if eng1_id:
+                if eng1_id and raw_org1.get("code"):
                     engagement_to_code[eng1_id] = str(raw_org1["code"])
+                if eng1_id and raw_org1.get("logo"):
+                    engagement_to_logo[eng1_id] = str(raw_org1["logo"])
 
             raw_org2 = match.get("idOrganismeEquipe2")
-            if isinstance(raw_org2, dict) and raw_org2.get("code"):
+            if isinstance(raw_org2, dict):
                 eng2 = match.get("idEngagementEquipe2")
                 eng2_id = str(
                     eng2.get("id", "") if isinstance(eng2, dict) else eng2 or ""
                 )
-                if eng2_id:
+                if eng2_id and raw_org2.get("code"):
                     engagement_to_code[eng2_id] = str(raw_org2["code"])
+                if eng2_id and raw_org2.get("logo"):
+                    engagement_to_logo[eng2_id] = str(raw_org2["logo"])
 
         team_matches: list[MatchDetails] = []
         for match in raw_matches:
@@ -517,12 +529,15 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
         for row in raw_standings:
             raw_engagement = row.get("idEngagement")
             club_code: str | None = None
+            club_logo_id: str | None = None
             if isinstance(raw_engagement, dict):
                 row_engagement_id = str(raw_engagement.get("id", ""))
                 team_label = raw_engagement.get("nom") or row.get("nomEquipe", "N/A")
                 raw_org = raw_engagement.get("idOrganisme")
                 if isinstance(raw_org, dict) and raw_org.get("code"):
                     club_code = str(raw_org["code"])
+                if isinstance(raw_org, dict) and raw_org.get("logo"):
+                    club_logo_id = str(raw_org["logo"])
             elif raw_engagement is not None:
                 row_engagement_id = str(raw_engagement)
                 team_label = row.get("nomEquipe", "N/A")
@@ -532,6 +547,8 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
 
             if not club_code and row_engagement_id:
                 club_code = engagement_to_code.get(row_engagement_id)
+            if not club_logo_id and row_engagement_id:
+                club_logo_id = engagement_to_logo.get(row_engagement_id)
 
             # Architectural choice: sanitize Directus string numbers into native integers
             # to guarantee compatibility with Home Assistant sensor state classes (measurement)
@@ -556,6 +573,7 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             quotient = row.get("quotient")
 
             standing_url = _build_team_url(club_code, row_engagement_id)
+            standing_logo_url = _build_logo_url(base_url, club_logo_id)
 
             standing_entry = {
                 "position": pos,
@@ -576,6 +594,7 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
                 "quotient": quotient,
                 "url": standing_url,
                 "team_url": standing_url,
+                "logo_url": standing_logo_url,
             }
             parsed_standings.append(standing_entry)
 

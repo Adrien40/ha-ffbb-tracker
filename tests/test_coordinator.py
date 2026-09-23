@@ -473,6 +473,153 @@ def test_standings_matches_tracked_engagement(hass, sample_poule_data):
     assert len(result.standings) == 2
 
 
+def test_standings_builds_logo_url_from_nested_idorganisme(hass):
+    """A classement row whose idEngagement.idOrganisme carries its own
+    "logo" id builds logo_url directly from it, the same way team_url is
+    built from that row's own code (test_standings_reads_club_code_from_
+    nested_idorganisme) -- no rencontres fallback needed."""
+    coordinator = _make_coordinator_with_client(hass, "https://api.ffbb.app")
+    data = {
+        "id": "poule-1",
+        "nom": "Poule A",
+        "rencontres": [],
+        "classements": [
+            {
+                "id": "rank-1",
+                "idEngagement": {
+                    "id": "engagement-nested",
+                    "nom": "Nested Org Team",
+                    "idOrganisme": {
+                        "id": "org-nested",
+                        "code": "NAQ0040999",
+                        "logo": "club-logo-uuid",
+                    },
+                },
+                "nomEquipe": "Nested Org Team",
+                "matchJoues": 2,
+                "points": 4,
+                "position": 1,
+                "gagnes": 2,
+                "perdus": 0,
+            }
+        ],
+    }
+
+    result = coordinator._process_poule_data(data)
+
+    row = result.standings[0]
+    assert row["logo_url"] == (
+        "https://api.ffbb.app/assets/club-logo-uuid?height=220&fit=contain&format=avif"
+    )
+
+
+def test_standings_falls_back_to_rencontres_logo_when_row_lacks_one(hass):
+    """When a classement row's own idOrganisme has no "logo" (a common
+    Directus shape -- see test_standings_builds_team_url_when_code_
+    available for the same pattern with club_code), logo_url falls back
+    to the org objects on this team's own matches, keyed by engagement id."""
+    coordinator = _make_coordinator_with_client(hass, "https://api.ffbb.app")
+    data = {
+        "id": "poule-1",
+        "nom": "Poule A",
+        "rencontres": [
+            {
+                "id": "match-1",
+                "idEngagementEquipe1": {"id": "engagement-flat"},
+                "idOrganismeEquipe1": {
+                    "id": "org-flat",
+                    "code": "NAQ0040141",
+                    "logo": "flat-team-logo-uuid",
+                },
+                "idEngagementEquipe2": {"id": "engagement-123"},
+                "idOrganismeEquipe2": {"id": "org-1", "code": "NAQ0040001"},
+            }
+        ],
+        "classements": [
+            {
+                "id": "rank-flat",
+                "idEngagement": "engagement-flat",  # flat id, no nested org at all
+                "nomEquipe": "Flat Team",
+                "matchJoues": 1,
+                "points": 2,
+                "position": 1,
+                "gagnes": 1,
+                "perdus": 0,
+            }
+        ],
+    }
+
+    result = coordinator._process_poule_data(data)
+
+    flat_row = result.standings[0]
+    assert flat_row["logo_url"] == (
+        "https://api.ffbb.app/assets/flat-team-logo-uuid"
+        "?height=220&fit=contain&format=avif"
+    )
+
+
+def test_standings_logo_url_none_when_club_has_no_logo_registered(hass):
+    """A club with a code but no "logo" field (common for smaller clubs,
+    same case as the match-level test_logo_url_none_when_club_has_no_
+    logo_registered) resolves to None, not a broken URL."""
+    coordinator = _make_coordinator_with_client(hass, "https://api.ffbb.app")
+    data = {
+        "id": "poule-1",
+        "nom": "Poule A",
+        "rencontres": [],
+        "classements": [
+            {
+                "id": "rank-1",
+                "idEngagement": {
+                    "id": "engagement-nested",
+                    "idOrganisme": {"id": "org-nested", "code": "NAQ0040999"},
+                },
+                "nomEquipe": "No Logo Team",
+                "matchJoues": 1,
+                "points": 2,
+                "position": 1,
+            }
+        ],
+    }
+
+    result = coordinator._process_poule_data(data)
+
+    assert result.standings[0]["logo_url"] is None
+
+
+def test_standings_logo_url_none_when_client_is_none(hass):
+    """Coordinators built without a real client (base_url unavailable)
+    resolve no standings logos either, mirroring the match-level
+    test_logo_url_none_when_client_is_none, rather than raising."""
+    coordinator = _make_coordinator(hass)
+    data = {
+        "id": "poule-1",
+        "nom": "Poule A",
+        "rencontres": [],
+        "classements": [
+            {
+                "id": "rank-1",
+                "idEngagement": {
+                    "id": "engagement-nested",
+                    "idOrganisme": {
+                        "id": "org-nested",
+                        "code": "NAQ0040999",
+                        "logo": "some-uuid",
+                    },
+                },
+                "nomEquipe": "Some Team",
+                "matchJoues": 1,
+                "points": 2,
+                "position": 1,
+            }
+        ],
+    }
+
+    result = coordinator._process_poule_data(data)
+
+    assert result.standings[0]["logo_url"] is None
+
+
 def test_draw_result_when_scores_equal(hass):
     """A tied, played match is classified as 'draw', not left as None."""
     coordinator = _make_coordinator(hass)
