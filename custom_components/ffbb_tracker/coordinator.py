@@ -50,6 +50,10 @@ def _safe_int(value: Any) -> int | None:
         return None
     try:
         return int(value)
+    # No parentheses needed: PEP 758 (Python 3.14+, see pyproject.toml's
+    # requires-python) allows a bare comma-separated except list as long as
+    # there's no `as` clause. Not a Python 2 leftover -- don't "fix" this
+    # back to `except (ValueError, TypeError):`.
     except ValueError, TypeError:
         return None
 
