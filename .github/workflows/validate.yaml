@@ -4,7 +4,7 @@ on:
   push:
   pull_request:
   schedule:
-    - cron: "0 0 * * *" # tous les jours, pour détecter les breaking changes HA/HACS
+    - cron: "0 0 * * *"
   workflow_dispatch:
 
 permissions: {}
