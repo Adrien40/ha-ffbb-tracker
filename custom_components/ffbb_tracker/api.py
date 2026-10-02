@@ -279,7 +279,7 @@ class FFBBClient:
                 "rencontres.idOrganismeEquipe2.code,"
                 "rencontres.idOrganismeEquipe2.logo,"
                 "rencontres.salle.id,rencontres.salle.libelle,rencontres.salle.adresse,"
-                "rencontres.salle.commune.libelle,"
+                "rencontres.salle.commune.libelle,rencontres.salle.commune.codePostal,"
                 "classements.id,classements.idEngagement.id,classements.idEngagement.nom,"
                 "classements.idEngagement.idOrganisme.code,"
                 "classements.matchJoues,classements.points,classements.position,"

@@ -183,6 +183,9 @@
   "exceptions": {
     "entry_not_found": {
       "message": "Aucune équipe ne correspond à l'entrée de configuration « {entry_id} ». Vérifiez l'identifiant, ou omettez-le pour cibler toutes les équipes suivies."
+    },
+    "entry_not_loaded": {
+      "message": "L'équipe de l'entrée de configuration « {entry_id} » n'est pas chargée (configuration en échec, en cours, ou entrée désactivée). Vérifiez l'état de l'intégration, ou omettez l'identifiant pour cibler toutes les équipes chargées."
     }
   },
   "services": {

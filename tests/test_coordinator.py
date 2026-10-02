@@ -1225,3 +1225,123 @@ def test_standings_rows_expose_draws_from_the_api(hass):
     assert result.standings[0]["won"] == 2
     assert result.standings[0]["lost"] == 1
     assert result.standings[0]["played"] == 3
+
+
+# --- gym postal code (lives on salle.commune, not salle) ---------------------
+
+
+def test_gym_postal_code_is_read_from_the_commune(hass):
+    """The postal code must come from `salle.commune.codePostal`.
+
+    That is where the FFBB API puts it; `ffbbserver_salles` has no
+    `codePostal` field of its own.
+    """
+    coordinator = _make_coordinator(hass)
+    rencontre = {
+        "id": "match-cp",
+        "numero": "1",
+        "numeroJournee": "1",
+        "joue": False,
+        "nomEquipe1": "Basket Landes",
+        "nomEquipe2": "Adversaire",
+        "date_rencontre": "2030-01-10T20:00:00+01:00",
+        "idEngagementEquipe1": {"id": "engagement-123"},
+        "idEngagementEquipe2": {"id": "engagement-456"},
+        "salle": {
+            "libelle": "Gymnase Test",
+            "adresse": "2 avenue de la Gare",
+            "commune": {"libelle": "Dax", "codePostal": "40100"},
+        },
+    }
+
+    data = coordinator._process_poule_data(_minimal_poule(rencontre))
+
+    assert data.next_match is not None
+    assert data.next_match.gym_postal_code == "40100"
+    assert data.next_match.formatted_address == (
+        "Gymnase Test, 2 avenue de la Gare, 40100, Dax"
+    )
+
+
+# --- live window beyond the 3 h next_match grace period ----------------------
+
+
+def _unplayed_rencontre(match_id: str, started: datetime) -> dict:
+    """Return an unplayed rencontre for the tracked team, starting at `started`."""
+    return {
+        "id": match_id,
+        "numero": "1",
+        "numeroJournee": "1",
+        "resultatEquipe1": None,
+        "resultatEquipe2": None,
+        "joue": False,
+        "nomEquipe1": "Basket Landes",
+        "nomEquipe2": "Adversaire",
+        "date_rencontre": started.isoformat(),
+        "idEngagementEquipe1": {"id": "engagement-123"},
+        "idEngagementEquipe2": {"id": "engagement-456"},
+        "idOrganismeEquipe2": {"id": "org-2", "nom": "Adversaire"},
+        "salle": None,
+    }
+
+
+def test_live_window_beyond_three_hours_keeps_match_as_next_match(hass):
+    """With a 5 h window, a match that started 4 h ago must still count.
+
+    Previously next_match dropped any unplayed match older than a hardcoded
+    3 h, so windows of 4-6 h (allowed by the options flow) silently did
+    nothing: the match vanished from next_match, is_match_live went False
+    and polling fell back to the slow interval while the result was still
+    awaited.
+    """
+    coordinator = _make_coordinator(hass)
+    coordinator._live_window_after_hours = 5
+    started = datetime.now(UTC) - timedelta(hours=4)
+
+    data = coordinator._process_poule_data(
+        _minimal_poule(_unplayed_rencontre("match-long", started))
+    )
+
+    assert data.next_match is not None
+    assert data.next_match.match_id == "match-long"
+    assert data.next_match.is_stale is False
+    assert coordinator._is_match_live(data) is True
+    assert coordinator._compute_update_interval(data) == timedelta(
+        minutes=LIVE_SCAN_INTERVAL
+    )
+
+
+def test_default_window_still_drops_match_after_three_hours(hass):
+    """With the default 3 h window nothing changes: after 3 h the unplayed
+    match is no longer 'live' and only survives as a stale fallback."""
+    coordinator = _make_coordinator(hass)
+    started = datetime.now(UTC) - timedelta(hours=4)
+
+    data = coordinator._process_poule_data(
+        _minimal_poule(_unplayed_rencontre("match-old", started))
+    )
+
+    assert data.next_match is not None
+    assert data.next_match.is_stale is True
+    assert coordinator._is_match_live(data) is False
+    assert coordinator._compute_update_interval(data) == timedelta(
+        minutes=DEFAULT_SCAN_INTERVAL
+    )
+
+
+def test_short_live_window_does_not_shrink_next_match_grace(hass):
+    """A 1 h live window must not make next_match drop the match after 1 h:
+    the 3 h display grace is a floor, only longer windows extend it."""
+    coordinator = _make_coordinator(hass)
+    coordinator._live_window_after_hours = 1
+    started = datetime.now(UTC) - timedelta(hours=2)
+
+    data = coordinator._process_poule_data(
+        _minimal_poule(_unplayed_rencontre("match-2h", started))
+    )
+
+    assert data.next_match is not None
+    assert data.next_match.match_id == "match-2h"
+    assert data.next_match.is_stale is False
+    # ...but it is outside the 1 h live window, so polling stays slow.
+    assert coordinator._is_match_live(data) is False

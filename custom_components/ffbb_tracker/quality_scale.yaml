@@ -2,7 +2,10 @@ rules:
   # Bronze
   action-setup:
     status: done
-    comment: Services registered via async_setup_services(), called from async_setup_entry.
+    comment: >
+      Actions are registered once in async_setup() (via async_setup_services())
+      and never removed on unload, with CONFIG_SCHEMA = config_entry_only_config_schema.
+      Targeting a team that is not loaded raises ServiceValidationError (entry_not_loaded).
   appropriate-polling:
     status: done
     comment: DataUpdateCoordinator with dynamic interval (_compute_update_interval), tightened around match time.

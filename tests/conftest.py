@@ -51,8 +51,10 @@ def sample_poule_data() -> dict:
                     "id": "salle-1",
                     "libelle": "Gymnase Andre Chavanne",
                     "adresse": "1 rue du Stade",
-                    "codePostal": "40000",
-                    "commune": {"libelle": "Mont-de-Marsan"},
+                    "commune": {
+                        "libelle": "Mont-de-Marsan",
+                        "codePostal": "40000",
+                    },
                 },
             },
             {

@@ -183,6 +183,9 @@
   "exceptions": {
     "entry_not_found": {
       "message": "No team matches the config entry \"{entry_id}\". Verify the identifier or omit it to target all tracked teams."
+    },
+    "entry_not_loaded": {
+      "message": "The team for config entry \"{entry_id}\" is not loaded (setup failed, is still in progress, or it was disabled). Check the integration's status, or omit the identifier to target all loaded teams."
     }
   },
   "services": {

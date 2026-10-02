@@ -127,8 +127,9 @@ actions:
       {% elif trigger.id == 'callback_refresh' %}
         true
       {% elif trigger.id == 'rappel_veille' %}
-        {% set match_dt = as_datetime(states(date_sensor), default=none) %}
-        {{ match_dt is not none and match_dt.astimezone().date() == (now().date() + timedelta(days=1)) }}
+        {% set match_utc = as_datetime(states(date_sensor), default=none) %}
+        {% set match_dt = as_local(match_utc) if match_utc is not none else none %}
+        {{ match_dt is not none and match_dt.date() == (now().date() + timedelta(days=1)) }}
       {% elif trigger.id == 'alerte_ffbb' %}
         {{ trigger.from_state is not none and
            trigger.to_state is not none and
@@ -144,7 +145,10 @@ actions:
       parse_mode: html
       disable_web_page_preview: true
       message: |-
-        {%- set dt = as_datetime(states(date_sensor), default=none) -%}
+        {#- Sensor timestamps are UTC: convert to the instance time zone before
+            formatting, or the hour (and sometimes the day) is wrong. -#}
+        {%- set dt_utc = as_datetime(states(date_sensor), default=none) -%}
+        {%- set dt = as_local(dt_utc) if dt_utc is not none else none -%}
         {%- set days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'] -%}
         {%- set months = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'] -%}
         {%- set lieu = states(location_sensor) -%}
@@ -160,7 +164,7 @@ actions:
           {%- endif -%}
         {%- else -%}
           {%- if dt is not none -%}
-            {%- set delta = (dt.astimezone().date() - now().date()).days -%}
+            {%- set delta = (dt.date() - now().date()).days -%}
             {%- set statut = '🔥 <b>Match aujourd\'hui !</b>' if delta == 0 else ('🔥 <b>Match demain !</b>' if delta == 1 else ('⏳ <b>Match dans ' ~ delta ~ ' jours !</b>' if delta > 1 else '🏀 <b>Prochain match</b>')) -%}
           {%- else -%}
             {%- set statut = '🏀 <b>Prochain match</b>' -%}

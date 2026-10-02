@@ -32,6 +32,7 @@ from .const import (
     LIVE_WINDOW_BEFORE_MINUTES,
     LOGO_ASSET_FORMAT,
     LOGO_ASSET_HEIGHT,
+    NEXT_MATCH_GRACE_HOURS,
     SEASON_ROLLOVER_THRESHOLD_DAYS,
     TOKEN_REFRESH_FAILURE_THRESHOLD,
 )
@@ -505,17 +506,27 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
         last_match: MatchDetails | None = None
         next_match: MatchDetails | None = None
 
+        # How long after its scheduled start an unplayed match remains the
+        # "next match". It must be at least as long as the live window the
+        # user configured: _is_match_live() only looks at next_match, so a
+        # shorter grace period would drop the match (and fast polling) before
+        # the window the user asked for has elapsed. The grace period is also
+        # never shorter than NEXT_MATCH_GRACE_HOURS, so a short live window
+        # (1-2 h) doesn't make the match vanish from the sensors early.
+        next_match_cutoff = now - timedelta(
+            hours=max(NEXT_MATCH_GRACE_HOURS, self._live_window_after_hours)
+        )
+
         for match in team_matches:
             if match.is_played:
                 last_match = match
             elif next_match is None and (
-                match.match_date is None
-                or match.match_date >= (now - timedelta(hours=3))
+                match.match_date is None or match.match_date >= next_match_cutoff
             ):
                 next_match = match
 
         # Architectural choice: if no unplayed match falls within the normal
-        # "now - 3h" window (e.g. a postponed/cancelled match left unplayed
+        # grace window (see next_match_cutoff above) (e.g. a postponed/cancelled match left unplayed
         # far in the past, with no newer fixture yet scheduled), fall back to
         # the earliest unplayed match regardless of date. Showing a possibly
         # stale next_match is preferable to leaving the sensor at None, which
@@ -738,7 +749,7 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             result=result,
             gym_name=salle.get("libelle") or salle.get("nom"),
             gym_address=salle.get("adresse"),
-            gym_postal_code=salle.get("codePostal"),
+            gym_postal_code=commune.get("codePostal"),
             gym_city=commune.get("libelle"),
             team_logo_url=team_logo_url,
             opponent_logo_url=opponent_logo_url,

@@ -34,6 +34,11 @@ MAX_SCAN_INTERVAL: Final = 1440
 # Live match polling settings
 LIVE_SCAN_INTERVAL: Final = 5
 LIVE_WINDOW_BEFORE_MINUTES: Final = 60
+
+# An unplayed match stays the "next match" for at least this long after its
+# scheduled start (late kick-offs, results published late). A live window
+# longer than this extends it -- see FFBBDataUpdateCoordinator._process_poule_data.
+NEXT_MATCH_GRACE_HOURS: Final = 3
 LIVE_WINDOW_AFTER_HOURS: Final = 3
 
 CONF_LIVE_POLLING: Final = "live_polling"

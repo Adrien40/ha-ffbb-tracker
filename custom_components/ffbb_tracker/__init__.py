@@ -12,9 +12,10 @@ from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.typing import ConfigType
 
 from .api import FFBBClient, FFBBRateLimiter
-from .const import DOMAIN
+from .const import CONF_POULE_ID, DOMAIN
 from .coordinator import FFBBDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -44,7 +45,23 @@ SERVICE_STANDINGS_SCHEMA = vol.Schema(
     }
 )
 
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
 type FFBBConfigEntry = ConfigEntry[FFBBDataUpdateCoordinator]
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the integration's actions once, independently of any team.
+
+    Home Assistant's `action-setup` rule: actions belong in `async_setup`,
+    not `async_setup_entry`. Registered here they exist from startup on and
+    are never removed, so an automation calling one validates even while no
+    team is loaded, and a reload (every options change) never opens a
+    window where the action is missing. Handlers resolve their target
+    entries at call time (see `_resolve_target_entries`).
+    """
+    async_setup_services(hass)
+    return True
 
 
 def get_rate_limiter(hass: HomeAssistant) -> FFBBRateLimiter:
@@ -75,8 +92,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: FFBBConfigEntry) -> bool
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    async_setup_services(hass)
-
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     return True
@@ -88,23 +103,33 @@ async def _async_update_listener(hass: HomeAssistant, entry: FFBBConfigEntry) ->
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: FFBBConfigEntry) -> bool:
-    """Unload a config entry and clean up services when the last entry is removed."""
+    """Unload a config entry.
+
+    The actions stay registered (see `async_setup`) and the shared rate
+    limiter in `hass.data` is kept, so request pacing survives a reload.
+    Only this team's cached poule payload is dropped, and only if no other
+    loaded team still tracks the same poule.
+    """
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        loaded_entries = [
-            e
-            for e in hass.config_entries.async_loaded_entries(DOMAIN)
-            if e.entry_id != entry.entry_id
-        ]
-        if not loaded_entries:
-            for service in (
-                SERVICE_REFRESH,
-                SERVICE_GET_NEXT_MATCHES,
-                SERVICE_GET_STANDINGS,
-            ):
-                hass.services.async_remove(DOMAIN, service)
-            hass.data.pop(DOMAIN, None)
+        _drop_unused_poule_cache(hass, entry)
 
     return unload_ok
+
+
+def _drop_unused_poule_cache(hass: HomeAssistant, entry: FFBBConfigEntry) -> None:
+    """Forget the cached poule payload once no loaded team needs it."""
+    poule_id = str(entry.data.get(CONF_POULE_ID, ""))
+    still_used = any(
+        str(other.data.get(CONF_POULE_ID, "")) == poule_id
+        for other in hass.config_entries.async_loaded_entries(DOMAIN)
+        if other.entry_id != entry.entry_id
+    )
+    if still_used:
+        return
+
+    poule_caches = hass.data.get(DOMAIN, {}).get("_poule_cache")
+    if isinstance(poule_caches, dict):
+        poule_caches.pop(poule_id, None)
 
 
 def _resolve_target_entries(
@@ -112,12 +137,13 @@ def _resolve_target_entries(
 ) -> list[FFBBConfigEntry]:
     """Return the config entries a service call should act on.
 
-    With no `entry_id`, every tracked team is targeted (existing behavior).
-    With an `entry_id` that matches nothing -- typo, stale reference from
-    an old automation, entry since removed -- raise instead of silently
-    returning an empty/no-op result, so the mistake is visible where it
-    was made (the automation/script call) rather than showing up as
-    "nothing happened".
+    With no `entry_id`, every tracked team is targeted; handlers skip those
+    that are not loaded. With an `entry_id` that matches nothing -- typo,
+    stale reference from an old automation, entry since removed -- or whose
+    team is not loaded (setup failed or in progress, or mid-reload), raise
+    instead of silently returning an empty/no-op result, so the mistake is
+    visible where it was made (the automation/script call) rather than
+    showing up as "nothing happened".
     """
     entries: list[FFBBConfigEntry] = hass.config_entries.async_entries(DOMAIN)
     if target_entry_id is None:
@@ -128,6 +154,14 @@ def _resolve_target_entries(
         raise ServiceValidationError(
             translation_domain=DOMAIN,
             translation_key="entry_not_found",
+            translation_placeholders={"entry_id": target_entry_id},
+        )
+    # HA removes `runtime_data` when an entry is unloaded and only sets it
+    # once setup succeeded, so its absence means "not loaded".
+    if getattr(matched[0], "runtime_data", None) is None:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="entry_not_loaded",
             translation_placeholders={"entry_id": target_entry_id},
         )
     return matched

@@ -223,7 +223,9 @@ actions:
         {%- if not raw_date and ns.last_date -%}
           {%- set raw_date = states(ns.last_date) if states(ns.last_date) not in ['unknown', 'unavailable', ''] else none -%}
         {%- endif -%}
-        {%- set dt = as_datetime(raw_date, default=none) if raw_date else none -%}
+        {#- match_date is UTC: convert to the instance time zone before formatting. -#}
+        {%- set dt_utc = as_datetime(raw_date, default=none) if raw_date else none -%}
+        {%- set dt = as_local(dt_utc) if dt_utc is not none else none -%}
         {%- set days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'] -%}
         {%- set months = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'] -%}
         {%- set date_str = (days[dt.weekday()] ~ ' ' ~ dt.day ~ ' ' ~ months[dt.month - 1] ~ ' à ' ~ dt.strftime('%Hh%M')) if dt is not none else 'Date inconnue' -%}

@@ -1243,3 +1243,119 @@ def test_form_sensor_streak_of_one_when_result_just_changed(hass):
     sensor.hass = hass
 
     assert sensor.extra_state_attributes["current_streak"] == "1L"
+
+
+# ---------------------------------------------------------------------------
+# Recorder: large attributes must stay out of the database
+# ---------------------------------------------------------------------------
+
+# Home Assistant's recorder refuses to store a state's attributes once their
+# JSON form exceeds this size (it logs a warning and drops them).
+_RECORDER_MAX_ATTRIBUTES_BYTES = 16384
+
+
+def _season_fixtures(count: int) -> list[MatchDetails]:
+    """Return `count` realistic, fully played fixtures with logos and URLs."""
+    logo = (
+        "https://api.ffbb.app/assets/3f2a9c1e-7b4d-4e8a-9c21-5d6e7f8a9b0c"
+        "?height=220&fit=contain&format=avif"
+    )
+    url = (
+        "https://competitions.ffbb.com/ligues/ara/comites/0042/clubs/"
+        "ara0042030/equipes/200000003456789"
+    )
+    return [
+        _make_match(
+            match_id=f"match-{i}",
+            match_number=str(1000 + i),
+            round_number=str(i + 1),
+            team_name="BASKET CLUB SAINTE SIGOLENE 1",
+            opponent_name="US MONTREAL LA CLUSE BASKET 2",
+            is_played=True,
+            team_score=68,
+            opponent_score=54,
+            result="win",
+            team_logo_url=logo,
+            opponent_logo_url=logo,
+            team_url=url,
+            opponent_url=url,
+        )
+        for i in range(count)
+    ]
+
+
+def _standings_rows(count: int) -> list[dict]:
+    """Return `count` realistic standings rows, as built by the coordinator."""
+    url = (
+        "https://competitions.ffbb.com/ligues/ara/comites/0042/clubs/"
+        "ara0042030/equipes/200000003456789"
+    )
+    logo = (
+        "https://api.ffbb.app/assets/3f2a9c1e-7b4d-4e8a-9c21-5d6e7f8a9b0c"
+        "?height=220&fit=contain&format=avif"
+    )
+    return [
+        {
+            "position": i + 1,
+            "team_name": "BASKET CLUB SAINTE SIGOLENE 1",
+            "points": 30,
+            "played": 15,
+            "won": 13,
+            "lost": 2,
+            "draws": 0,
+            "forfeits": 0,
+            "defaults": 0,
+            "referee_penalties": 0,
+            "coach_penalties": 0,
+            "total_penalties": 0,
+            "points_for": 1100,
+            "points_against": 900,
+            "points_diff": 200,
+            "quotient": "1.222",
+            "url": url,
+            "team_url": url,
+            "logo_url": logo,
+        }
+        for i in range(count)
+    ]
+
+
+def _recorded_size(sensor) -> int:
+    """Size in bytes of the attributes the recorder would actually store."""
+    unrecorded = sensor._unrecorded_attributes
+    recorded = {
+        key: value
+        for key, value in sensor.extra_state_attributes.items()
+        if key not in unrecorded
+    }
+    return len(json.dumps(recorded))
+
+
+def test_poule_sensor_calendar_is_excluded_from_the_recorder(hass):
+    """A full 22-match season exceeds the recorder's 16 KB attribute cap.
+
+    Unless `calendar` is declared unrecorded, Home Assistant drops *all*
+    of the sensor's attributes from history and logs a warning.
+    """
+    coordinator = _make_coordinator(hass)
+    coordinator.data = _make_team_data(fixtures=_season_fixtures(22))
+    sensor = FFBBPouleSensor(coordinator)
+
+    full_size = len(json.dumps(sensor.extra_state_attributes))
+    assert full_size > _RECORDER_MAX_ATTRIBUTES_BYTES, "fixture no longer realistic"
+
+    assert "calendar" in sensor._unrecorded_attributes
+    assert _recorded_size(sensor) < _RECORDER_MAX_ATTRIBUTES_BYTES
+    # Still available live (dashboards, templates, automations).
+    assert len(sensor.extra_state_attributes["calendar"]) == 22
+
+
+def test_rank_sensor_standings_is_excluded_from_the_recorder(hass):
+    """The full standings table is bulky live data, not history."""
+    coordinator = _make_coordinator(hass)
+    coordinator.data = _make_team_data(standings=_standings_rows(14))
+    sensor = FFBBRankSensor(coordinator)
+
+    assert "standings" in sensor._unrecorded_attributes
+    assert _recorded_size(sensor) < _RECORDER_MAX_ATTRIBUTES_BYTES
+    assert len(sensor.extra_state_attributes["standings"]) == 14

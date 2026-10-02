@@ -435,6 +435,10 @@ class FFBBRankSensor(FFBBSensorBase):
 
     _attr_translation_key = "rank"
     _attr_state_class = SensorStateClass.MEASUREMENT
+    # The whole pool table is bulky live data: keep it available to
+    # dashboards/templates but out of the recorder, which refuses (and
+    # warns about) attribute sets over 16 KB.
+    _unrecorded_attributes = frozenset({ATTR_STANDINGS})
 
     def __init__(self, coordinator: FFBBDataUpdateCoordinator) -> None:
         """Initialize the rank sensor."""
@@ -579,6 +583,10 @@ class FFBBPouleSensor(FFBBSensorBase):
     """Sensor displaying the assigned pool name and season schedule."""
 
     _attr_translation_key = "poule"
+    # The full season calendar (every fixture with logos/URLs) easily exceeds
+    # the recorder's 16 KB attribute cap, which would make Home Assistant drop
+    # *all* of this sensor's attributes from history. Still available live.
+    _unrecorded_attributes = frozenset({"calendar"})
 
     def __init__(self, coordinator: FFBBDataUpdateCoordinator) -> None:
         """Initialize the pool sensor."""

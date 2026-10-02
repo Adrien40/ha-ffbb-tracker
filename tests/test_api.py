@@ -449,3 +449,25 @@ async def test_get_poule_data_no_warning_below_pagination_limit(caplog):
         await client.get_poule_data("poule-1")
 
     assert "hit the API limit" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_get_poule_data_requests_gym_postal_code_through_commune():
+    """The postal code lives on the commune, not on the salle itself.
+
+    Directus' `ffbbserver_salles` collection has no `codePostal` field
+    (it is on `ffbbserver_communes`), so the request must go through the
+    `commune` relation -- and must NOT ask for a non-existent
+    `salle.codePostal`, which Directus would reject for the whole request.
+    """
+    session = MagicMock()
+    payload = {"data": {"id": "poule-1", "nom": "Poule A"}}
+    session.get = MagicMock(return_value=_mock_response(200, payload))
+    client = FFBBClient(session)
+
+    await client.get_poule_data("poule-1")
+
+    _, kwargs = session.get.call_args
+    fields = kwargs["params"]["fields"].split(",")
+    assert "rencontres.salle.commune.codePostal" in fields
+    assert "rencontres.salle.codePostal" not in fields
