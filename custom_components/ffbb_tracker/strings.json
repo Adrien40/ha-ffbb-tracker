@@ -170,7 +170,7 @@
         "step": {
           "confirm": {
             "title": "Find \"{team_name}\" again",
-            "description": "The team \"{team_name}\" has been unavailable on the FFBB API for several days. This typically happens at the start of a season, when the FFBB assigns new engagement and pool IDs. The next steps search for \"{team_name}\" again so it can be tracked under its new IDs. The entities of the team are recreated for it."
+            "description": "The team \"{team_name}\" has been unavailable on the FFBB API for several days. This typically happens at the start of a season, when the FFBB assigns new engagement and pool IDs. The next steps search for \"{team_name}\" again so it can be tracked under its new IDs. Its existing entities are kept, with their IDs, names and history, so your automations and dashboards keep working."
           },
           "search": {
             "title": "Search for \"{team_name}\"",

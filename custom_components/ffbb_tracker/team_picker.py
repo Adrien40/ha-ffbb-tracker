@@ -15,7 +15,9 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 
 from .api import (
     FFBBApiError,
@@ -30,6 +32,7 @@ from .const import (
     CONF_POULE_ID,
     CONF_TEAM_NAME,
     DOMAIN,
+    FRESH_RANK_EVOLUTION,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -142,6 +145,88 @@ async def lookup_engagement(
     if not (engagement.get("idPoule") or {}).get("id"):
         return None, "no_poule_found"
     return engagement, None
+
+
+def migrate_entities(
+    hass: HomeAssistant, entry: ConfigEntry, new_engagement_id: str
+) -> None:
+    """Make the entry's entities and device follow the team to a new engagement.
+
+    Entities and the device are keyed by engagement ID. Switching the entry to
+    another team used to remove the device and let the integration recreate
+    everything, which changed the entity IDs whenever the team or competition
+    name changed (the usual case at a season rollover) and always lost the
+    user's customizations. Moving the existing registry entries to the new
+    engagement ID instead keeps their entity IDs, custom names, history and
+    area: only the team they follow changes.
+
+    Call it before the entry is updated and reloaded. A device or entity whose
+    new ID is already taken is left as is (a warning is logged for entities),
+    and any device that still doesn't belong to the new engagement is removed.
+    If a device for the new engagement already exists, nothing is moved onto it
+    (see below) and the entry's entities are recreated as before.
+    """
+    old_engagement_id = str(entry.data.get(CONF_ENGAGEMENT_ID, ""))
+    if old_engagement_id and old_engagement_id != new_engagement_id:
+        if dr.async_get(hass).async_get_device(
+            identifiers={(DOMAIN, new_engagement_id)}
+        ):
+            # Home Assistant doesn't refuse two devices with the same
+            # identifiers, it silently lets them coexist -- and entities can
+            # then end up on the wrong one. Don't move anything onto it: fall
+            # back to recreating the entry's entities under the new team.
+            _LOGGER.info(
+                "A device for team %s already exists; the entities of this "
+                "entry will be recreated instead of moved",
+                new_engagement_id,
+            )
+        else:
+            _migrate_entity_ids(hass, entry, old_engagement_id, new_engagement_id)
+            _migrate_device(hass, entry, old_engagement_id, new_engagement_id)
+    remove_stale_devices(hass, entry, new_engagement_id)
+
+
+def _migrate_entity_ids(
+    hass: HomeAssistant, entry: ConfigEntry, old_id: str, new_id: str
+) -> None:
+    """Give the entry's entities the unique ID of the new engagement."""
+    registry = er.async_get(hass)
+    prefix = f"{old_id}_"
+    for entity in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if not entity.unique_id.startswith(prefix):
+            continue
+        key = entity.unique_id.removeprefix(prefix)
+        new_unique_id = f"{new_id}_{key}"
+        try:
+            registry.async_update_entity(entity.entity_id, new_unique_id=new_unique_id)
+        except (ValueError, HomeAssistantError) as err:
+            _LOGGER.warning(
+                "Could not keep %s for the new team (%s); it will be left "
+                "unavailable and can be deleted: %s",
+                entity.entity_id,
+                new_unique_id,
+                err,
+            )
+            continue
+        if key == "rank_evolution":
+            # Its restored positions belong to the old team's pool.
+            hass.data.setdefault(DOMAIN, {}).setdefault(
+                FRESH_RANK_EVOLUTION, set()
+            ).add(new_unique_id)
+
+
+def _migrate_device(
+    hass: HomeAssistant, entry: ConfigEntry, old_id: str, new_id: str
+) -> None:
+    """Point the entry's device at the new engagement, keeping its area etc."""
+    registry = dr.async_get(hass)
+    for device in dr.async_entries_for_config_entry(registry, entry.entry_id):
+        if (DOMAIN, old_id) not in device.identifiers:
+            continue
+        try:
+            registry.async_update_device(device.id, new_identifiers={(DOMAIN, new_id)})
+        except (ValueError, HomeAssistantError) as err:
+            _LOGGER.debug("Device %s left for removal: %s", device.id, err)
 
 
 def remove_stale_devices(

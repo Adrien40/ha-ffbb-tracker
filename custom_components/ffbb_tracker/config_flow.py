@@ -46,7 +46,7 @@ from .team_picker import (
     club_teams,
     engagement_id_from_query,
     lookup_engagement,
-    remove_stale_devices,
+    migrate_entities,
     search_clubs,
     team_options,
 )
@@ -223,7 +223,7 @@ class FFBBTrackerConfigFlow(ConfigFlow, domain=DOMAIN):
             ):
                 return self.async_abort(reason="already_configured")
 
-            remove_stale_devices(self.hass, self._reconfigure_entry, engagement_id)
+            migrate_entities(self.hass, self._reconfigure_entry, engagement_id)
 
             return self.async_update_reload_and_abort(
                 self._reconfigure_entry,

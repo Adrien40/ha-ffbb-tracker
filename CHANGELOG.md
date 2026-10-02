@@ -1,5 +1,28 @@
 # FFBB Tracker - Changelog
 
+## 0.9.0
+
+🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀
+
+This release makes switching a team to its new IDs (reconfiguring, or fixing a season rollover) keep its entities, and fixes the rank evolution sensor, which had never kept its value across restarts.
+
+### 🐛 Bug fixes
+- **Reconfiguring a team, or fixing a season rollover, recreated all its entities.** Measured on 18 entities: with the same team and competition names 17 entity IDs survived (the 18th, which had been renamed by hand, was reset); with a renamed team or competition, none did. A season rollover usually renames one or both (age category, division, season label), so the automations and dashboards using these entities broke, while the README claimed the opposite. The team's existing entities and device now follow it to its new engagement: same entity IDs, custom names and IDs, history and area. If something already uses the new ID, the entities are recreated as before (a warning says which one could not be kept).
+- **The rank evolution sensor never kept its value across restarts.** It exposed the positions it needs to save under a name Home Assistant doesn't read, so nothing was ever saved and the evolution started over at every restart, although the README said it was preserved. Fixed: it is now kept across restarts (the first restart after upgrading still starts over, since nothing was ever stored). It still starts over when the entry is switched to another team, since positions in another pool can't be compared.
+
+### 🧰 Maintenance
+- Test suite grown from 473 to 488 tests, 99 % coverage. The migration is tested through the real reconfiguration (four cases: same names, renamed competition, renamed team, both) and through the repair, with a hand-customized entity, a device area, and the awkward cases (an entity or a device already using the new ID). The rank evolution is tested through Home Assistant's own save and restore, a layer the previous tests never reached: they checked the property and the restore logic separately, never that Home Assistant would call it.
+- Home Assistant lets two devices share the same identifiers instead of refusing the second one, so the migration checks for a collision itself rather than relying on an error.
+
+### 📚 Documentation
+- README: what it says about reconfiguring a team, and about the rank evolution sensor after a restart, now describes what really happens.
+
+### 📋 Upgrade notes
+- Nothing to do. Entities that an earlier reconfiguration already recreated keep their current IDs: only reconfigurations from now on carry the existing entities over.
+- On reload the device is renamed after the new team and competition; entity IDs don't change with it.
+
+🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀
+
 ## 0.8.9
 
 🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀

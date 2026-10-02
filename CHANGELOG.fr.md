@@ -1,5 +1,28 @@
 # FFBB Tracker - Journal des modifications
 
+## 0.9.0
+
+🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀
+
+Cette version fait en sorte que basculer une équipe sur ses nouveaux identifiants (reconfiguration, ou correction d'un changement de saison) conserve ses entités, et corrige le capteur d'évolution du classement, qui n'avait jamais gardé sa valeur d'un redémarrage à l'autre.
+
+### 🐛 Corrections
+- **Reconfigurer une équipe, ou corriger un changement de saison, recréait toutes ses entités.** Mesuré sur 18 entités : avec les mêmes noms d'équipe et de compétition, 17 identifiants d'entités survivaient (le 18e, renommé à la main, était réinitialisé) ; avec une équipe ou une compétition renommée, aucun. Un changement de saison renomme généralement l'un ou l'autre (catégorie d'âge, division, libellé de saison), donc les automatisations et tableaux de bord qui utilisaient ces entités cassaient, alors que le README affirmait le contraire. Les entités et l'appareil existants de l'équipe la suivent maintenant vers son nouvel engagement : mêmes identifiants d'entités, noms et identifiants personnalisés, historique et zone. Si quelque chose utilise déjà le nouvel identifiant, les entités sont recréées comme avant (un avertissement indique laquelle n'a pas pu être conservée).
+- **Le capteur d'évolution du classement ne gardait jamais sa valeur d'un redémarrage à l'autre.** Il exposait les positions à sauvegarder sous un nom que Home Assistant ne lit pas : rien n'était jamais enregistré et l'évolution repartait de zéro à chaque redémarrage, alors que le README disait qu'elle était préservée. Corrigé : elle est maintenant conservée d'un redémarrage à l'autre (le premier redémarrage après la mise à jour repart encore de zéro, puisque rien n'avait jamais été enregistré). Elle repart aussi de zéro quand l'entrée est basculée sur une autre équipe, car des positions dans une autre poule ne sont pas comparables.
+
+### 🧰 Maintenance
+- Suite de tests passée de 473 à 488 tests, 99 % de couverture. La migration est testée par la vraie reconfiguration (quatre cas : mêmes noms, compétition renommée, équipe renommée, les deux) et par la réparation, avec une entité personnalisée à la main, une zone d'appareil et les cas délicats (une entité ou un appareil qui utilise déjà le nouvel identifiant). L'évolution du classement est testée par la sauvegarde et la restauration de Home Assistant lui-même, une couche que les tests précédents n'atteignaient pas : ils vérifiaient la propriété et la logique de restauration séparément, jamais que Home Assistant l'appellerait.
+- Home Assistant laisse deux appareils partager les mêmes identifiants au lieu de refuser le second ; la migration vérifie donc elle-même une collision au lieu de compter sur une erreur.
+
+### 📚 Documentation
+- README : ce qu'il dit de la reconfiguration d'une équipe, et du capteur d'évolution après un redémarrage, décrit maintenant ce qui se passe réellement.
+
+### 📋 Notes de mise à jour
+- Rien à faire. Les entités qu'une reconfiguration précédente a déjà recréées gardent leurs identifiants actuels : seules les reconfigurations à partir de maintenant reportent les entités existantes.
+- Au rechargement, l'appareil est renommé d'après la nouvelle équipe et la nouvelle compétition ; les identifiants d'entités ne changent pas avec lui.
+
+🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀
+
 ## 0.8.9
 
 🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀

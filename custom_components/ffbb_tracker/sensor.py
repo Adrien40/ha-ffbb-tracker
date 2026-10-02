@@ -31,6 +31,8 @@ from .const import (
     ATTR_TEAM_LOGO_URL,
     ATTR_TEAM_SCORE,
     ATTRIBUTION,
+    DOMAIN,
+    FRESH_RANK_EVOLUTION,
 )
 from .coordinator import FFBBDataUpdateCoordinator
 from .entity import navigation_attributes, team_device_info
@@ -485,8 +487,18 @@ class FFBBRankEvolutionSensor(FFBBSensorBase, RestoreSensor):
         self._previous_position: int | None = None
 
     @property
-    def extra_restore_data(self) -> FFBBRankEvolutionExtraData:
-        """Return data to be restored on next startup."""
+    def extra_restore_state_data(self) -> FFBBRankEvolutionExtraData:  # type: ignore[override]
+        """Return the data Home Assistant saves and restores for this sensor.
+
+        `extra_restore_state_data` is the name Home Assistant reads. This used
+        to be called `extra_restore_data`, which it never looks at, so the
+        positions were never saved and the evolution always started over
+        after a restart.
+
+        (RestoreSensor declares this as its own value-restoring data class,
+        which this sensor deliberately replaces: its state is computed from
+        the two positions, not restored.)
+        """
         return FFBBRankEvolutionExtraData(
             current_position=self._current_position,
             previous_position=self._previous_position,
@@ -496,7 +508,16 @@ class FFBBRankEvolutionSensor(FFBBSensorBase, RestoreSensor):
         """Restore previous positions on integration startup."""
         await super().async_added_to_hass()
 
-        last_extra_data = await self.async_get_last_extra_data()
+        # Just moved to another team (see team_picker.migrate_entities): the
+        # last positions belong to the old team's pool, so start over.
+        fresh = self.hass.data.get(DOMAIN, {}).get(FRESH_RANK_EVOLUTION)
+        starting_over = fresh is not None and self.unique_id in fresh
+        if starting_over:
+            fresh.discard(self.unique_id)
+
+        last_extra_data = (
+            None if starting_over else await self.async_get_last_extra_data()
+        )
         if last_extra_data is not None:
             restored = FFBBRankEvolutionExtraData.from_dict(last_extra_data.as_dict())
             if restored is not None:

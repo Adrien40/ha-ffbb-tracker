@@ -630,11 +630,11 @@ async def test_reconfigure_to_new_engagement_updates_entry(hass):
 
 
 @pytest.mark.asyncio
-async def test_reconfigure_to_new_engagement_removes_stale_device(hass):
-    """Reconfiguring towards a different team must remove the device tied
-    to the *old* engagement_id -- this is a data-deleting side effect,
-    not just a display change, so it deserves its own explicit check
-    rather than trusting visual review of the diff.
+async def test_reconfigure_to_new_engagement_moves_the_device_to_the_new_team(hass):
+    """Reconfiguring towards a different team must keep the device -- with
+    its area, entities and customizations -- and point it at the new
+    engagement_id, instead of deleting it and recreating everything (see
+    tests/test_entity_migration.py for the entities).
     """
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -680,7 +680,9 @@ async def test_reconfigure_to_new_engagement_removes_stale_device(hass):
 
     assert result["type"] == "abort"
     assert result["reason"] == "reconfigure_successful"
-    assert device_registry.async_get(old_device.id) is None
+    moved = device_registry.async_get(old_device.id)
+    assert moved is not None
+    assert moved.identifiers == {(DOMAIN, "999999")}
 
 
 @pytest.mark.asyncio

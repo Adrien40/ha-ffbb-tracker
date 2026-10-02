@@ -170,7 +170,7 @@
         "step": {
           "confirm": {
             "title": "Retrouver « {team_name} »",
-            "description": "L'équipe « {team_name} » est introuvable sur l'API FFBB depuis plusieurs jours. Cela arrive généralement en début de nouvelle saison, quand la FFBB réattribue les identifiants d'engagement et de poule. Les étapes suivantes recherchent « {team_name} » à nouveau pour la suivre sous ses nouveaux identifiants. Les entités de l'équipe sont recréées pour l'occasion."
+            "description": "L'équipe « {team_name} » est introuvable sur l'API FFBB depuis plusieurs jours. Cela arrive généralement en début de nouvelle saison, quand la FFBB réattribue les identifiants d'engagement et de poule. Les étapes suivantes recherchent « {team_name} » à nouveau pour la suivre sous ses nouveaux identifiants. Ses entités existantes sont conservées, avec leurs identifiants, noms et historique, donc vos automatisations et tableaux de bord continuent de fonctionner."
           },
           "search": {
             "title": "Rechercher « {team_name} »",

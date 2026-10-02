@@ -273,7 +273,10 @@ rules:
       needed updating there.
   reconfiguration-flow:
     status: done
-    comment: async_step_reconfigure lets users switch team/pool without removing the entry.
+    comment: >
+      async_step_reconfigure lets users switch team/pool without removing the entry;
+      the existing entities and device follow the team (team_picker.migrate_entities),
+      so entity IDs, custom names, history and area are kept.
   repair-issues:
     status: done
     comment: >

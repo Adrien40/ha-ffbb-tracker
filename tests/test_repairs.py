@@ -365,9 +365,9 @@ async def test_the_entry_vanishing_mid_flow_aborts_cleanly(hass):
     assert result["reason"] == "entry_not_found"
 
 
-async def test_the_old_teams_devices_are_removed(hass):
-    """Entities are keyed by engagement, so the old device would otherwise stay
-    behind as unavailable entities."""
+async def test_the_teams_device_follows_it_to_the_new_ids(hass):
+    """The device is kept (with its area and entities) and pointed at the new
+    engagement, instead of being removed and recreated."""
     entry = _make_entry(hass)
     registry = dr.async_get(hass)
     old = registry.async_get_or_create(
@@ -382,7 +382,9 @@ async def test_the_old_teams_devices_are_removed(hass):
     with patch.object(hass.config_entries, "async_schedule_reload"):
         await flow.async_step_team({"engagement_id": "200000005374157"})
 
-    assert registry.async_get(old.id) is None
+    moved = registry.async_get(old.id)
+    assert moved is not None
+    assert moved.identifiers == {(DOMAIN, "200000005374157")}
 
 
 # --- end to end through Home Assistant's own repairs manager ----------------

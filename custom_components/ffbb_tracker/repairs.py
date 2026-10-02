@@ -34,7 +34,7 @@ from .team_picker import (
     club_teams,
     engagement_id_from_query,
     lookup_engagement,
-    remove_stale_devices,
+    migrate_entities,
     search_clubs,
     team_options,
 )
@@ -214,8 +214,9 @@ class SeasonRolloverRepairFlow(RepairsFlow):
 
         Returns (result, None) when done, or (None, error key) when the form
         should be shown again with that error. Same effect as reconfiguring
-        the entry: new data, title and unique ID, devices of the old team
-        removed, then a reload. Home Assistant removes the repair issue itself
+        the entry: its entities and device follow the team to the new IDs
+        (see team_picker.migrate_entities), then new data, title and unique
+        ID, then a reload. Home Assistant removes the repair issue itself
         when this flow finishes.
         """
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
@@ -228,7 +229,7 @@ class SeasonRolloverRepairFlow(RepairsFlow):
         if existing is not None and existing.entry_id != entry.entry_id:
             return None, "already_configured"
 
-        remove_stale_devices(self.hass, entry, engagement_id)
+        migrate_entities(self.hass, entry, engagement_id)
         self.hass.config_entries.async_update_entry(
             entry, data=data, title=title, unique_id=engagement_id
         )

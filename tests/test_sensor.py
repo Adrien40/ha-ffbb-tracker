@@ -28,6 +28,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from homeassistant.helpers.restore_state import RestoreEntity
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ffbb_tracker.const import (
@@ -864,8 +865,8 @@ def test_rank_evolution_resumes_diffing_after_restore(hass, monkeypatch):
     assert sensor.native_value == "+1"  # 5 - 4, preserved from the restored data
 
 
-def test_extra_restore_data_reflects_current_and_previous_position(hass):
-    """extra_restore_data is what HA actually persists to storage on
+def test_extra_restore_state_data_reflects_current_and_previous_position(hass):
+    """`extra_restore_state_data` is what HA actually persists to storage on
     shutdown -- it must reflect the sensor's in-memory positions exactly,
     or a restart would silently lose or corrupt the evolution baseline.
     """
@@ -874,10 +875,24 @@ def test_extra_restore_data_reflects_current_and_previous_position(hass):
     sensor._current_position = 3
     sensor._previous_position = 5
 
-    extra = sensor.extra_restore_data
+    extra = sensor.extra_restore_state_data
 
     assert extra.current_position == 3
     assert extra.previous_position == 5
+
+
+def test_the_sensor_exposes_its_positions_under_the_name_home_assistant_reads():
+    """The positions used to sit in a property called `extra_restore_data`,
+    which Home Assistant never reads, so they were never saved and the
+    evolution started over at every restart. The tests checked the property
+    and the restore logic separately, never that Home Assistant would call it.
+    """
+    assert hasattr(RestoreEntity, "extra_restore_state_data")
+    assert not hasattr(RestoreEntity, "extra_restore_data")
+    assert isinstance(FFBBRankEvolutionSensor.extra_restore_state_data, property), (
+        "must override the hook Home Assistant reads"
+    )
+    assert not hasattr(FFBBRankEvolutionSensor, "extra_restore_data")
 
 
 async def test_async_added_to_hass_restores_positions_from_storage(hass, monkeypatch):
