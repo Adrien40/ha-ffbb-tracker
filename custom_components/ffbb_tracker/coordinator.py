@@ -138,12 +138,26 @@ class _PouleCacheEntry:
     ~1000-fixture payload from the FFBB API on every refresh cycle.
     """
 
-    __slots__ = ("data", "fetched_at", "lock")
+    __slots__ = (
+        "data",
+        "failure_message",
+        "failure_seq",
+        "failure_type",
+        "fetched_at",
+        "lock",
+    )
 
     def __init__(self) -> None:
         self.data: dict[str, Any] | None = None
         self.fetched_at: datetime | None = None
         self.lock = asyncio.Lock()
+        # The last failed fetch. `failure_seq` counts failures so that a team
+        # that was queued behind a fetch that then failed can share that
+        # failure instead of repeating the same request and waiting for the
+        # same timeout (see _async_fetch_fresh_poule).
+        self.failure_seq = 0
+        self.failure_type: type[FFBBApiError] | None = None
+        self.failure_message = ""
 
 
 def _get_poule_cache(hass: HomeAssistant, poule_id: str) -> _PouleCacheEntry:
@@ -386,36 +400,52 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
         refresh window.
         """
         cache = _get_poule_cache(self.hass, self.poule_id)
+        failures_before = cache.failure_seq
         async with cache.lock:
             now = dt_util.utcnow()
-            is_stale = (
-                cache.data is None
+            data = cache.data
+            if (
+                data is None
                 or cache.fetched_at is None
                 or (now - cache.fetched_at) > _POULE_CACHE_TTL
-            )
-            if is_stale:
-                data = await self.client.get_poule_data(self.poule_id)
-                self.last_api_fetch_at = now
-                cache.data = await self._async_recheck_missing_results(data)
-                cache.fetched_at = now
+            ):
+                data = await self._async_fetch_fresh_poule(cache, now, failures_before)
 
-            if cache.data is None:
-                # Should be unreachable: get_poule_data() either raises
-                # (FFBBApiError/FFBBConnectionError) or returns a dict, so
-                # cache.data can't still be None here. Raising explicitly
-                # instead of relying on `assert` avoids a confusing
-                # AttributeError downstream if this ever changes, and
-                # survives Python running with optimizations (-O), which
-                # strips asserts.
-                raise FFBBApiError(
-                    f"No poule data available for poule {self.poule_id} "
-                    "after fetch attempt"
-                )
             self.pending_results = [
                 self._summarize_pending(match, age)
-                for match, age in self._find_pending_results(cache.data)
+                for match, age in self._find_pending_results(data)
             ]
-            return cache.data
+            return data
+
+    async def _async_fetch_fresh_poule(
+        self, cache: _PouleCacheEntry, now: datetime, failures_before: int
+    ) -> dict[str, Any]:
+        """Query the API for the poule and store the answer in the shared cache.
+
+        Called with the cache lock held. `failures_before` is the cache's
+        failure count when this refresh started waiting for the lock: if it
+        changed, a fetch that this refresh was queued behind has failed, and
+        the same request would only wait for the same timeout again, so that
+        failure is raised straight away. A refresh that starts after the
+        failure always queries the API itself, so retrying (the Refresh
+        button, the next poll) is never blocked.
+        """
+        if cache.failure_seq != failures_before and cache.failure_type is not None:
+            raise cache.failure_type(cache.failure_message)
+
+        try:
+            data = await self.client.get_poule_data(self.poule_id)
+        except FFBBApiError as err:
+            cache.failure_seq += 1
+            cache.failure_type = type(err)
+            cache.failure_message = str(err)
+            raise
+
+        cache.failure_type = None
+        self.last_api_fetch_at = now
+        cache.data = await self._async_recheck_missing_results(data)
+        cache.fetched_at = now
+        return cache.data
 
     def _find_pending_results(
         self, data: dict[str, Any]

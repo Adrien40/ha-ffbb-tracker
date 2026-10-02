@@ -194,6 +194,35 @@ def test_ci_dependencies_include_every_tool_the_workflows_install():
         assert tool in requirements
 
 
+def test_oldest_home_assistant_test_requirements_match_hacs_json():
+    """The suite is also run on the oldest Home Assistant the integration
+    declares, so the pins must follow `hacs.json`."""
+    declared = json.loads(_text("hacs.json"))["homeassistant"]
+    series = ".".join(declared.split(".")[:2])
+    requirements = _text("requirements_test_min.txt")
+
+    assert re.search(rf"^homeassistant=={re.escape(series)}\.\d+$", requirements, re.M)
+    assert re.search(
+        r"^pytest-homeassistant-custom-component==\d+\.\d+\.\d+$", requirements, re.M
+    )
+
+
+def test_tests_workflow_also_runs_the_suite_on_the_oldest_home_assistant():
+    jobs = yaml.safe_load((WORKFLOWS / "tests.yaml").read_text(encoding="utf-8"))[
+        "jobs"
+    ]
+    commands = {
+        name: "\n".join(step.get("run", "") for step in job["steps"])
+        for name, job in jobs.items()
+    }
+
+    min_jobs = [c for c in commands.values() if "requirements_test_min.txt" in c]
+    gate_jobs = [c for c in commands.values() if "--cov-fail-under=95" in c]
+    assert len(min_jobs) == 1 and "pytest" in min_jobs[0]
+    assert len(gate_jobs) == 1
+    assert "requirements_test_min.txt" not in gate_jobs[0]
+
+
 def test_pytest_coverage_is_scoped_to_the_integration():
     """`pytest --cov` with no argument relies on this configuration."""
     pyproject = _text("pyproject.toml")

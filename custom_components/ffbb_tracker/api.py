@@ -4,11 +4,24 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import Any, Final
 
 import aiohttp
 
-from .const import API_BASE_URL, DEFAULT_DIRECTUS_TOKEN, DEFAULT_TIMEOUT
+from .const import (
+    API_BASE_URL,
+    DEFAULT_DIRECTUS_TOKEN,
+    DEFAULT_TIMEOUT,
+    ERROR_BODY_MAX_LENGTH,
+    MAX_TRANSIENT_RETRIES,
+    RETRY_BASE_DELAY,
+    RETRY_MAX_WAIT,
+    RETRY_STATUSES,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,6 +50,58 @@ _DIAGNOSTIC_RESPONSE_HEADERS: Final = (
     "x-cache",
     "cf-cache-status",
 )
+
+_HTML_TAG = re.compile(r"<[^>]*>")
+
+
+def _short_body(text: str) -> str:
+    """Return a one-line, length-bounded version of an error response body.
+
+    Error pages from a proxy or CDN can be whole HTML documents; putting them
+    verbatim in an exception message floods the logs.
+    """
+    plain = " ".join(_HTML_TAG.sub(" ", text).split())
+    if len(plain) > ERROR_BODY_MAX_LENGTH:
+        return plain[:ERROR_BODY_MAX_LENGTH].rstrip() + "…"
+    return plain
+
+
+def _retry_delay(retry_after: str | None, attempt: int) -> float | None:
+    """Return how long to wait before retrying a transient failure.
+
+    Honours the server's Retry-After (seconds or an HTTP date); without one,
+    backs off exponentially from RETRY_BASE_DELAY. Returns None when the
+    server asks us to wait longer than RETRY_MAX_WAIT: it is better to fail
+    this update and let the next scheduled poll try again than to hold it.
+    """
+    if retry_after:
+        value = retry_after.strip()
+        wait: float | None
+        try:
+            wait = float(value)
+        except ValueError:
+            try:
+                wait = (
+                    parsedate_to_datetime(value) - datetime.now(UTC)
+                ).total_seconds()
+            except TypeError, ValueError:
+                wait = None
+        if wait is not None:
+            wait = max(wait, 0.0)
+            return wait if wait <= RETRY_MAX_WAIT else None
+    backoff: float = RETRY_BASE_DELAY * 2.0**attempt
+    return min(backoff, RETRY_MAX_WAIT)
+
+
+@dataclass(frozen=True)
+class _Reply:
+    """What one HTTP attempt returned."""
+
+    status: int
+    payload: Any = None
+    text: str = ""
+    retry_after: str | None = None
+
 
 # Request headers asking servers and intermediaries not to serve a stored copy.
 NO_CACHE_HEADERS: Final = {"Cache-Control": "no-cache", "Pragma": "no-cache"}
@@ -238,6 +303,11 @@ class FFBBClient:
     ) -> Any:
         """Execute a GET request against the Directus API with automatic retry.
 
+        Two kinds of retry happen here: a 401/403 refreshes the token and
+        retries once, and transient failures (429/502/503/504, see
+        RETRY_STATUSES) are retried up to MAX_TRANSIENT_RETRIES times after a
+        short wait. Every HTTP attempt has its own timeout.
+
         `extra_headers` are added to the request. When `response_headers` is
         given, the cache-related headers of the answer are copied into it.
         """
@@ -257,33 +327,87 @@ class FFBBClient:
         if extra_headers:
             headers.update(extra_headers)
 
+        transient_retries = 0
+        while True:
+            reply = await self._send(url, params, headers, response_headers)
+
+            if reply.status == 404:
+                raise FFBBNotFoundError(f"Resource not found at {url}")
+
+            if reply.status in (401, 403) and auth and retry:
+                _LOGGER.debug(
+                    "Received HTTP %s, refreshing token and retrying", reply.status
+                )
+                await self._refresh_token()
+                return await self._request(
+                    endpoint,
+                    params=params,
+                    auth=True,
+                    retry=False,
+                    extra_headers=extra_headers,
+                    response_headers=response_headers,
+                )
+
+            if (
+                reply.status in RETRY_STATUSES
+                and transient_retries < MAX_TRANSIENT_RETRIES
+            ):
+                delay = _retry_delay(reply.retry_after, transient_retries)
+                if delay is not None:
+                    transient_retries += 1
+                    _LOGGER.debug(
+                        "FFBB API returned HTTP %s, retrying in %.1f s (%d/%d)",
+                        reply.status,
+                        delay,
+                        transient_retries,
+                        MAX_TRANSIENT_RETRIES,
+                    )
+                    await asyncio.sleep(delay)
+                    if self._rate_limiter:
+                        await self._rate_limiter.throttle()
+                    continue
+            break
+
+        if reply.status != 200:
+            hint = f" (Retry-After: {reply.retry_after})" if reply.retry_after else ""
+            raise FFBBApiError(
+                f"FFBB API returned HTTP {reply.status}{hint}: "
+                f"{_short_body(reply.text)}"
+            )
+
+        if not isinstance(reply.payload, dict):
+            raise FFBBApiError(
+                f"Unexpected response shape from FFBB API at {url}: "
+                f"expected a JSON object, got {type(reply.payload).__name__}"
+            )
+        return reply.payload.get("data")
+
+    async def _send(
+        self,
+        url: str,
+        params: dict[str, Any] | None,
+        headers: dict[str, str],
+        response_headers: dict[str, str] | None,
+    ) -> _Reply:
+        """Perform one HTTP GET, with its own timeout, and return its outcome.
+
+        The status of a failed attempt is returned rather than raised so that
+        `_request` can decide whether to retry it. Transport problems are
+        turned into FFBBConnectionError / FFBBApiError here.
+        """
         try:
             async with (
                 asyncio.timeout(DEFAULT_TIMEOUT),
                 self._session.get(url, params=params, headers=headers) as response,
             ):
-                if response.status == 404:
-                    raise FFBBNotFoundError(f"Resource not found at {url}")
-
-                if response.status in (401, 403) and auth and retry:
-                    _LOGGER.debug(
-                        "Received HTTP %s, refreshing token and retrying",
-                        response.status,
-                    )
-                    await self._refresh_token()
-                    return await self._request(
-                        endpoint,
-                        params=params,
-                        auth=True,
-                        retry=False,
-                        extra_headers=extra_headers,
-                        response_headers=response_headers,
-                    )
-
                 if response.status != 200:
-                    text = await response.text()
-                    raise FFBBApiError(
-                        f"FFBB API returned HTTP {response.status}: {text}"
+                    retry_after = response.headers.get("Retry-After")
+                    return _Reply(
+                        response.status,
+                        text=await response.text(),
+                        retry_after=retry_after
+                        if isinstance(retry_after, str)
+                        else None,
                     )
 
                 if response_headers is not None:
@@ -292,13 +416,7 @@ class FFBBClient:
                         if isinstance(value, str):
                             response_headers[name] = value
 
-                payload = await response.json()
-                if not isinstance(payload, dict):
-                    raise FFBBApiError(
-                        f"Unexpected response shape from FFBB API at {url}: "
-                        f"expected a JSON object, got {type(payload).__name__}"
-                    )
-                return payload.get("data")
+                return _Reply(200, payload=await response.json())
         except TimeoutError as err:
             raise FFBBConnectionError(
                 f"Timeout while connecting to FFBB API: {err}"

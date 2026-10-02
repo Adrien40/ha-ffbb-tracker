@@ -59,6 +59,7 @@ blueprint:
       default: "19:00:00"
       selector:
         time: {}
+  source_url: https://github.com/Adrien40/ha-ffbb-tracker/blob/main/blueprints/automation/ffbb_tracker/match_notifications_telegram.yaml
 
 mode: restart
 max_exceeded: silent
@@ -157,7 +158,12 @@ actions:
         {%- set is_home = state_attr(location_sensor, 'is_home') -%}
         {%- set map_search_url = 'https://www.google.com/maps/search/?api=1&query=' ~ (lieu | urlencode) -%}
         {%- if trigger is defined and trigger.id is defined and trigger.id == 'alerte_ffbb' -%}
-          {%- if trigger.from_state is not none and trigger.from_state.state not in ['unknown', 'unavailable', ''] -%}
+          {#- A different match number means another match took the place of the
+              previous one (e.g. once a match is played, the next one appears);
+              the same number with other values is a change to that match. -#}
+          {%- set old_number = trigger.from_state.attributes.get('match_number') if trigger.from_state is not none else none -%}
+          {%- set new_number = trigger.to_state.attributes.get('match_number') if trigger.to_state is not none else none -%}
+          {%- if trigger.from_state is not none and trigger.from_state.state not in ['unknown', 'unavailable', ''] and not (old_number is not none and new_number is not none and old_number != new_number) -%}
             {%- set statut = '⚠️ <b>Mise à jour du match</b>' -%}
           {%- else -%}
             {%- set statut = '📢 <b>Nouveau match programmé</b>' -%}

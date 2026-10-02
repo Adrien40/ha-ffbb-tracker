@@ -278,10 +278,12 @@ rules:
     status: done
     comment: >
       A FFBBNotFoundError persisting SEASON_ROLLOVER_THRESHOLD_DAYS (3 days)
-      raises a season_rollover issue (is_fixable=True); repairs.py wires a
-      one-click fix flow that hands off straight into async_step_reconfigure
-      for the affected entry, cleared automatically on the next successful
-      refresh. A second issue, token_refresh_failing, is raised
+      raises a season_rollover issue (is_fixable=True); repairs.py runs the
+      team search again inside the repair dialog (shared with the config flow
+      through team_picker.py) and switches the affected entry to the team's
+      new IDs, cleared when the flow finishes or on the next successful
+      refresh. tests/test_repairs.py drives it through Home Assistant's own
+      repairs manager. A second issue, token_refresh_failing, is raised
       (is_fixable=False, no code-level fix exists) after
       TOKEN_REFRESH_FAILURE_THRESHOLD consecutive failures of the dynamic
       Directus token refresh -- surfacing what would otherwise only be a

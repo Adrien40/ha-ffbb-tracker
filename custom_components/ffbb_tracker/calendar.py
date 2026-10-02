@@ -6,14 +6,14 @@ from datetime import datetime, timedelta
 
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from . import FFBBConfigEntry
-from .const import DOMAIN
+from .const import ATTRIBUTION
 from .coordinator import FFBBDataUpdateCoordinator, MatchDetails
+from .entity import team_device_info
 
 # The calendar entity only reads coordinator.data; it performs no direct
 # network I/O of its own, so there is nothing to throttle here.
@@ -68,19 +68,13 @@ class FFBBCalendarEntity(CoordinatorEntity[FFBBDataUpdateCoordinator], CalendarE
 
     _attr_has_entity_name = True
     _attr_translation_key = "schedule"
-    _attr_attribution = "Données fournies par competitions.ffbb.com"
+    _attr_attribution = ATTRIBUTION
 
     def __init__(self, coordinator: FFBBDataUpdateCoordinator) -> None:
         """Initialize the calendar entity."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.engagement_id}_calendar"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.engagement_id)},
-            name=f"{coordinator.team_name} - {coordinator.competition_name}",
-            manufacturer="FFBB",
-            model=coordinator.competition_name,
-            entry_type=DeviceEntryType.SERVICE,
-        )
+        self._attr_device_info = team_device_info(coordinator)
 
     @property
     def event(self) -> CalendarEvent | None:

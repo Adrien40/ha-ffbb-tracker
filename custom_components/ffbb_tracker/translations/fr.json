@@ -169,9 +169,44 @@
       "fix_flow": {
         "step": {
           "confirm": {
-            "title": "Rechercher « {team_name} » à nouveau",
-            "description": "L'équipe « {team_name} » est introuvable sur l'API FFBB depuis plusieurs jours. Cela arrive généralement en début de nouvelle saison, quand la FFBB réattribue les identifiants d'engagement/poule. Cela ouvrira la recherche d'équipe pour retrouver « {team_name} » sous ses nouveaux identifiants d'engagement et de poule pour cette saison."
+            "title": "Retrouver « {team_name} »",
+            "description": "L'équipe « {team_name} » est introuvable sur l'API FFBB depuis plusieurs jours. Cela arrive généralement en début de nouvelle saison, quand la FFBB réattribue les identifiants d'engagement et de poule. Les étapes suivantes recherchent « {team_name} » à nouveau pour la suivre sous ses nouveaux identifiants. Les entités de l'équipe sont recréées pour l'occasion."
+          },
+          "search": {
+            "title": "Rechercher « {team_name} »",
+            "description": "Entrez un nom de club, une ville, l'URL ou l'identifiant d'une équipe pour retrouver « {team_name} » cette saison.",
+            "data": {
+              "search_query": "Club, ville, URL ou ID d'équipe"
+            }
+          },
+          "club": {
+            "title": "Sélectionner le club",
+            "description": "Choisissez votre club parmi les résultats.",
+            "data": {
+              "club_id": "Club"
+            }
+          },
+          "team": {
+            "title": "Sélectionner l'équipe",
+            "description": "Choisissez l'équipe à suivre à la place de « {team_name} ».",
+            "data": {
+              "engagement_id": "Équipe"
+            }
           }
+        },
+        "error": {
+          "cannot_connect": "Impossible de se connecter à l'API FFBB.",
+          "no_clubs_found": "Aucun club trouvé pour cette recherche.",
+          "no_teams_found": "Aucune équipe trouvée pour ce club.",
+          "invalid_engagement": "URL ou identifiant d'équipe invalide.",
+          "no_poule_found": "Aucune poule trouvée pour cette équipe.",
+          "query_too_short": "Merci de saisir au moins 2 caractères.",
+          "already_configured": "Cette équipe est déjà configurée.",
+          "unknown": "Erreur inattendue."
+        },
+        "abort": {
+          "club_not_found": "Club introuvable.",
+          "entry_not_found": "Cette équipe n'est plus configurée."
         }
       }
     },

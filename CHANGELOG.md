@@ -1,5 +1,39 @@
 # FFBB Tracker - Changelog
 
+## 0.8.9
+
+🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀
+
+This release makes updates more robust against hiccups of the FFBB API, fixes the season rollover repair (it never showed the user anything), and tells a new match from a change in the Telegram notifications.
+
+### ✨ New features
+- The `match_number` attribute, already on the next match date sensor, is now also on the next match opponent and location sensors. The notifications blueprint uses it (see below).
+- The notifications blueprint can now be updated with *Re-import blueprint*, like the result blueprint: it declares its source URL.
+
+### 🐛 Bug fixes
+- **The season rollover repair did nothing visible.** Its button started the reconfiguration flow in the background, and Home Assistant doesn't show flows started that way. The team search now runs inside the repair dialog: search by club name, team URL or team ID, pick the team, and the existing entry is switched over to its new IDs (the old team's device is removed and the entry reloads). It reuses the config flow's search, so both behave the same. Two smaller defects of that dialog are fixed as well: the first step forwarded the data Home Assistant starts every flow with to the confirmation step, which took it for an answer and skipped the explanation, and the texts never received the team name.
+- **The notifications blueprint said "Mise à jour du match" when a new match took the place of the previous one** (for instance right after a result), instead of "Nouveau match programmé". It now compares the match number before and after: another number is a new match, the same number with other values is an update.
+
+### 🛡️ Hardening
+- **Transient API errors are retried.** HTTP 429, 502, 503 and 504 are retried up to twice, after the delay the server asks for (`Retry-After`, in seconds or as a date) or, without one, after 1 then 2 seconds. A server asking for more than 10 seconds makes the update fail at once instead of holding it; the next scheduled poll tries again.
+- **Each HTTP attempt has its own 15 s timeout.** The token refresh and the retry used to share the first request's budget.
+- **Error messages are short.** An error page from a proxy or CDN is reduced to plain text and cut at 200 characters instead of filling the logs with HTML.
+- **Teams of the same pool no longer wait for the same failure one after the other.** When a pool request fails, the teams that were waiting behind it get that failure immediately instead of each repeating the request and waiting for the same timeout. A refresh started afterwards always queries the API itself, so the *Refresh* button and the next poll are never blocked.
+
+### 🧰 Maintenance
+- Compatibility with the oldest supported Home Assistant is now checked: the suite passes on Home Assistant 2026.3.0 (the minimum in `hacs.json`) and 2026.3.1, as well as on the latest release, with no change to the integration. `tests.yaml` gained a second job running the suite on 2026.3.1 (`requirements_test_min.txt`); the test tool has no release for 2026.3.0 itself, so that is the first patch release it supports.
+- Shared code: the five platforms build their device and the two location sensors their navigation links in one place (`entity.py`), and the team search is shared by the config flow and the repair (`team_picker.py`). Behaviour is unchanged. An unreachable guard in the poll code is removed.
+- Test suite grown from 401 to 473 tests, 99 % coverage. The season rollover repair is covered end to end through Home Assistant's own repairs manager, the layer that decides what the dialog shows and that the previous tests never exercised. New consistency tests check the minimum-version test setup against `hacs.json` and the workflow.
+
+### 📚 Documentation
+- README: new *How the integration identifies itself* entry in the limitations, explaining the public access key and the browser-like headers it uses, and that it never uses credentials. The descriptions of the season rollover repair now match how it works.
+
+### 📋 Upgrade notes
+- **Update the notifications blueprint** (`match_notifications_telegram.yaml`) to get the "Nouveau match programmé" wording. Home Assistant doesn't update blueprints with the integration. It now declares its source URL, so after replacing your copy once, *Re-import blueprint* works for it too.
+- In the worst case an update can now last longer when the API is struggling (up to two waits of 10 seconds). It succeeds more often instead of failing and waiting for the next poll.
+
+🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀
+
 ## 0.8.8
 
 🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀

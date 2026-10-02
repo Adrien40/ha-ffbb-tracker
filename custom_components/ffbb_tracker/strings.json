@@ -169,9 +169,44 @@
       "fix_flow": {
         "step": {
           "confirm": {
-            "title": "Search for \"{team_name}\" again",
-            "description": "The team \"{team_name}\" has been unavailable on the FFBB API for several days. This typically occurs during season rollovers when the FFBB assigns new engagement and pool IDs. This will open the team search so you can find \"{team_name}\" under its new engagement and pool IDs for this season."
+            "title": "Find \"{team_name}\" again",
+            "description": "The team \"{team_name}\" has been unavailable on the FFBB API for several days. This typically happens at the start of a season, when the FFBB assigns new engagement and pool IDs. The next steps search for \"{team_name}\" again so it can be tracked under its new IDs. The entities of the team are recreated for it."
+          },
+          "search": {
+            "title": "Search for \"{team_name}\"",
+            "description": "Enter a club name, city, team URL, or team ID to find \"{team_name}\" for this season.",
+            "data": {
+              "search_query": "Club, city, team URL, or team ID"
+            }
+          },
+          "club": {
+            "title": "Select Club",
+            "description": "Choose your club from the results.",
+            "data": {
+              "club_id": "Club"
+            }
+          },
+          "team": {
+            "title": "Select Team",
+            "description": "Choose the team to track instead of \"{team_name}\".",
+            "data": {
+              "engagement_id": "Team"
+            }
           }
+        },
+        "error": {
+          "cannot_connect": "Failed to connect to the FFBB API.",
+          "no_clubs_found": "No clubs found for this search.",
+          "no_teams_found": "No teams found for this club.",
+          "invalid_engagement": "Invalid team URL or engagement ID.",
+          "no_poule_found": "No pool found for this team.",
+          "query_too_short": "Please enter at least 2 characters.",
+          "already_configured": "This team is already configured.",
+          "unknown": "Unexpected error."
+        },
+        "abort": {
+          "club_not_found": "Club not found.",
+          "entry_not_found": "This team is no longer configured."
         }
       }
     },

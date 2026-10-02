@@ -36,7 +36,7 @@ If you find this project useful, you can support its development 🙏
 - ⚡ "Match finished" and "Rank change" event entities to trigger automations the instant something happens, not on every polling cycle
 - 🧩 Ready-to-import automation blueprints for Telegram notifications, no templating required
 - 🛠️ Three action services ready for automations and notification scripts (Telegram, pre-game alerts)
-- 🔧 Automatic repair notification if a team can no longer be found (season rollover), pointing you straight to Reconfigure
+- 🔧 Automatic repair notification if a team can no longer be found (season rollover), with a guided fix that searches for the team again
 - 🔍 Fast setup: search by club name, official club code (e.g. NAQ0040141), or direct team URL copy-paste
 - ⚙️ Simple 2-minute installation via HACS
 
@@ -340,8 +340,9 @@ Prefer clicking over writing YAML? Three automation blueprints ship in [`bluepri
 
 ### ⚠️ Known Limitations
 
-* **Engagement ID changes between seasons**: The FFBB re-assigns a new internal engagement ID to each team every season. If a tracked team's entities stop updating and stay unavailable for several days while the season is clearly still active, the most likely cause is that the team's engagement ID has changed. When this persists for 3 days, the integration now raises a repair notification automatically (**Settings** > **System** > **Repairs**) pointing you to the fix. Either way, use **Settings** > **Devices & services** > **FFBB Tracker** > **Reconfigure** to search for the team again and pick it up under its new ID — this keeps your existing automations and dashboard cards working, since the device and entity IDs are not affected by this operation.
+* **Engagement ID changes between seasons**: The FFBB re-assigns a new internal engagement ID to each team every season. If a tracked team's entities stop updating and stay unavailable for several days while the season is clearly still active, the most likely cause is that the team's engagement ID has changed. When this persists for 3 days, the integration now raises a repair notification automatically (**Settings** > **System** > **Repairs**) with a guided fix that searches for the team again right there. You can also do the same at any time with **Settings** > **Devices & services** > **FFBB Tracker** > **Reconfigure**, to pick it up under its new ID — this keeps your existing automations and dashboard cards working, since the device and entity IDs are not affected by this operation.
 * **No official API**: This integration relies on the public Directus endpoints used by the official web app rather than a documented, stable API. Breaking changes on the FFBB's side (schema changes, stricter bot filtering) can affect the integration without notice; see the [Troubleshooting](#-troubleshooting) section and open an [issue](https://github.com/Adrien40/ha-ffbb-tracker/issues) if something stops working.
+* **How the integration identifies itself**: to read the same public data as the FFBB's web app, the integration uses that web app's public, read-only access key (a default is bundled; the current one is fetched from the FFBB's public configuration when the API rejects it) and sends the User-Agent, Origin and Referer headers of a regular browser, because the API's bot filtering would otherwise reject its requests. It never uses your credentials and creates no account. Requests are spaced out by at least half a second, and polling happens every 60 minutes by default (15 at the shortest, and every 2 minutes at the shortest, only around a live match). This is an independent project and is not endorsed by the FFBB: if the FFBB asks for it to stop, or offers an official API, this will be changed.
 
 ---
 

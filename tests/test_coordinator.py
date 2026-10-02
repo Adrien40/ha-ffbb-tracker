@@ -1625,3 +1625,107 @@ async def test_the_missing_score_shows_up_in_the_team_data(hass, freezer):
     assert data.last_match is not None
     assert data.last_match.match_id == "m2"
     assert (data.last_match.team_score, data.last_match.opponent_score) == (27, 51)
+
+
+# --- teams sharing a poule: a failing fetch is shared with those queued ------
+
+
+def _make_sibling(hass, engagement_id: str) -> FFBBDataUpdateCoordinator:
+    """Another team of the same poule (poule-1), with its own client."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=engagement_id,
+        data={
+            CONF_ENGAGEMENT_ID: engagement_id,
+            CONF_POULE_ID: "poule-1",
+            CONF_TEAM_NAME: f"Team {engagement_id}",
+            CONF_COMPETITION_NAME: "Excellence Régionale",
+            CONF_ORGANISME_ID: "org-1",
+        },
+    )
+    entry.add_to_hass(hass)
+    return FFBBDataUpdateCoordinator(hass, client=_FakeClient(_poule()), entry=entry)
+
+
+class _SlowFailingClient:
+    """A client whose poule request fails, but only once `gate` is released,
+    so other teams can queue behind it first."""
+
+    base_url = "https://api.example"
+    token_refresh_failures = 0
+
+    def __init__(self, error: Exception) -> None:
+        self.gate = asyncio.Event()
+        self.calls = 0
+        self._error = error
+
+    async def get_poule_data(self, poule_id: str, **_kwargs):
+        self.calls += 1
+        await self.gate.wait()
+        raise self._error
+
+
+async def _queue_behind(hass, failing: _SlowFailingClient, *queued):
+    """Start a failing fetch, queue `queued` coordinators behind it, then let it
+    fail. Returns the results of (failing, *queued), exceptions included."""
+    first = _make_coordinator(hass)
+    first.client = failing
+    tasks = [asyncio.create_task(first._async_fetch_poule_data())]
+    await asyncio.sleep(0)  # `first` takes the cache lock and starts its request
+    for coordinator in queued:
+        tasks.append(asyncio.create_task(coordinator._async_fetch_poule_data()))
+    await asyncio.sleep(0)  # they are now waiting for the lock
+    failing.gate.set()
+    return await asyncio.gather(*tasks, return_exceptions=True)
+
+
+async def test_teams_queued_behind_a_failing_fetch_fail_fast(hass):
+    """Each queued team used to repeat the same request and wait for the same
+    timeout, one after the other."""
+    failing = _SlowFailingClient(FFBBConnectionError("down"))
+    second, third = _make_sibling(hass, "e2"), _make_sibling(hass, "e3")
+
+    results = await _queue_behind(hass, failing, second, third)
+
+    assert all(isinstance(r, FFBBConnectionError) for r in results)
+    assert all(str(r) == "down" for r in results)
+    assert failing.calls == 1
+    second.client.get_poule_data.assert_not_awaited()
+    third.client.get_poule_data.assert_not_awaited()
+
+
+async def test_the_failure_type_is_preserved_for_queued_teams(hass):
+    """A 'not found' must still count as not found for the team that shares it."""
+    failing = _SlowFailingClient(FFBBNotFoundError("poule gone"))
+    sibling = _make_sibling(hass, "e2")
+
+    results = await _queue_behind(hass, failing, sibling)
+
+    assert all(isinstance(r, FFBBNotFoundError) for r in results)
+    assert str(results[1]) == "poule gone"
+
+
+async def test_a_team_that_refreshes_after_the_failure_queries_the_api_itself(hass):
+    failing = _SlowFailingClient(FFBBConnectionError("down"))
+    await _queue_behind(hass, failing)
+    later = _make_sibling(hass, "e2")
+
+    data = await later._async_fetch_poule_data()
+
+    later.client.get_poule_data.assert_awaited_once()
+    assert data["id"] == "poule-1"
+
+
+async def test_the_failing_team_can_retry_straight_away(hass):
+    """The Refresh button and the refresh action must never be blocked by the
+    previous failure."""
+    coordinator = _make_coordinator(hass)
+    coordinator.client = _FakeClient(FFBBConnectionError("down"), _poule())
+
+    with pytest.raises(FFBBConnectionError):
+        await coordinator._async_fetch_poule_data()
+    data = await coordinator._async_fetch_poule_data()
+
+    assert coordinator.client.get_poule_data.await_count == 2
+    assert data["id"] == "poule-1"
+    assert _get_poule_cache(hass, "poule-1").failure_type is None

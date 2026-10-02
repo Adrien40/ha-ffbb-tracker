@@ -63,6 +63,17 @@ CONF_SCAN_INTERVAL: Final = "scan_interval"
 # FFBBDataUpdateCoordinator._handle_not_found in coordinator.py.
 SEASON_ROLLOVER_THRESHOLD_DAYS: Final = 3
 
+# Transient HTTP failures (rate limiting, gateway/availability errors) are
+# retried a couple of times with a short, bounded wait before giving up, so a
+# momentary hiccup doesn't turn into a failed update. A server asking us to
+# wait longer than RETRY_MAX_WAIT seconds (Retry-After) is not waited for: the
+# update fails and the next scheduled poll tries again.
+RETRY_STATUSES: Final = (429, 502, 503, 504)
+MAX_TRANSIENT_RETRIES: Final = 2
+RETRY_BASE_DELAY: Final = 1.0
+RETRY_MAX_WAIT: Final = 10.0
+ERROR_BODY_MAX_LENGTH: Final = 200
+
 # Safety net against an outdated poule response from the FFBB API (see
 # FFBBDataUpdateCoordinator._async_recheck_missing_results). When a match of
 # the tracked team started between STALE_RESULT_MIN_AGE_HOURS and
@@ -90,6 +101,9 @@ ATTR_GYM_CITY: Final = "gym_city"
 ATTR_NAVIGATION_URL = "navigation_url"
 ATTR_GOOGLE_MAPS_URL: Final = "google_maps_url"
 ATTR_WAZE_URL: Final = "waze_url"
+
+# Attribution shown on every entity.
+ATTRIBUTION: Final = "Données fournies par competitions.ffbb.com"
 ATTR_TEAM_SCORE: Final = "team_score"
 ATTR_OPPONENT_SCORE: Final = "opponent_score"
 ATTR_RESULT: Final = "result"

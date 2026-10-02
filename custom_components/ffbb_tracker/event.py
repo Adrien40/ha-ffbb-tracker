@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from homeassistant.components.event import EventEntity
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -19,9 +18,10 @@ from .const import (
     ATTR_POINT_DIFFERENCE,
     ATTR_ROUND,
     ATTR_TEAM_SCORE,
-    DOMAIN,
+    ATTRIBUTION,
 )
 from .coordinator import FFBBDataUpdateCoordinator, FFBBTeamData
+from .entity import team_device_info
 
 PARALLEL_UPDATES = 0
 
@@ -45,19 +45,13 @@ class FFBBBaseEvent(CoordinatorEntity[FFBBDataUpdateCoordinator], EventEntity):
     """Common device wiring shared by the FFBB Tracker event entities."""
 
     _attr_has_entity_name = True
-    _attr_attribution = "Données fournies par competitions.ffbb.com"
+    _attr_attribution = ATTRIBUTION
 
     def __init__(self, coordinator: FFBBDataUpdateCoordinator, key: str) -> None:
         """Initialize the event entity."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.engagement_id}_{key}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.engagement_id)},
-            name=f"{coordinator.team_name} - {coordinator.competition_name}",
-            manufacturer="FFBB",
-            model=coordinator.competition_name,
-            entry_type=DeviceEntryType.SERVICE,
-        )
+        self._attr_device_info = team_device_info(coordinator)
 
 
 class FFBBMatchFinishedEvent(FFBBBaseEvent):

@@ -12,11 +12,12 @@ without converting to the instance's local time zone prints the wrong hour
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
 import pytest
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers.template import Template
 from homeassistant.util.yaml import load_yaml
 
@@ -182,3 +183,103 @@ async def test_result_message_shows_local_match_time(paris):
 
     assert "Samedi 10 Janvier à 20h00" in rendered
     assert "19h00" not in rendered
+
+
+# --- match_notifications_telegram: "new match" vs "update" ------------------
+
+
+def _alert_variables(old: State | None, new: State) -> dict[str, Any]:
+    return {
+        **_match_variables(),
+        "trigger": {"id": "alerte_ffbb", "from_state": old, "to_state": new},
+    }
+
+
+async def _alert_message(paris, old: State | None, new: State) -> str:
+    paris.states.async_set(DATE_SENSOR, "2026-10-10T13:45:00+00:00")
+    paris.states.async_set(OPPONENT_SENSOR, "Biscarrosse")
+    paris.states.async_set(LOCATION_SENSOR, "Salle, Biscarrosse", {"is_home": False})
+    blueprint = _load("match_notifications_telegram.yaml")
+    message = _find_action(blueprint, "telegram_bot.send_message")["data"]["message"]
+    return await _render(paris, message, _alert_variables(old, new))
+
+
+def _opponent(state: str, number: str | None = None) -> State:
+    attributes = {} if number is None else {"match_number": number}
+    return State(OPPONENT_SENSOR, state, attributes)
+
+
+async def test_a_different_match_number_is_announced_as_a_new_match(paris):
+    """Once a match is played the next one takes its place on the sensors:
+    that is a new match, not a change to the previous one."""
+    rendered = await _alert_message(
+        paris,
+        _opponent("Biaudos", "11527"),
+        _opponent("Biscarrosse", "11549"),
+    )
+
+    assert "Nouveau match programmé" in rendered
+    assert "Mise à jour du match" not in rendered
+
+
+async def test_the_same_match_number_is_announced_as_an_update(paris):
+    rendered = await _alert_message(
+        paris,
+        _opponent("Biscarrosse", "11549"),
+        _opponent("Biscarrosse - 2", "11549"),
+    )
+
+    assert "Mise à jour du match" in rendered
+    assert "Nouveau match programmé" not in rendered
+
+
+@pytest.mark.parametrize("previous", ["unknown", "unavailable", ""])
+async def test_a_match_appearing_from_nothing_is_a_new_match(paris, previous):
+    rendered = await _alert_message(
+        paris, _opponent(previous), _opponent("Biscarrosse", "11549")
+    )
+
+    assert "Nouveau match programmé" in rendered
+
+
+async def test_without_match_numbers_a_change_stays_an_update(paris):
+    """Older versions of the integration don't put match_number on these
+    sensors: keep the previous behaviour rather than guessing."""
+    rendered = await _alert_message(
+        paris, _opponent("Biaudos"), _opponent("Biscarrosse")
+    )
+
+    assert "Mise à jour du match" in rendered
+
+
+async def test_a_match_number_on_one_side_only_is_not_enough_to_tell(paris):
+    rendered = await _alert_message(
+        paris, _opponent("Biaudos"), _opponent("Biscarrosse", "11549")
+    )
+
+    assert "Mise à jour du match" in rendered
+
+
+# --- source_url: lets Home Assistant offer "Re-import blueprint" ------------
+
+
+@pytest.mark.parametrize(
+    "filename",
+    ["match_notifications_telegram.yaml", "match_result_notification_telegram.yaml"],
+)
+def test_blueprints_declare_the_url_of_their_own_file(filename):
+    manifest = json.loads(
+        (
+            BLUEPRINT_DIR.parents[2]
+            / "custom_components"
+            / "ffbb_tracker"
+            / "manifest.json"
+        ).read_text(encoding="utf-8")
+    )
+    repo = manifest["documentation"]
+
+    source_url = _load(filename)["blueprint"].get("source_url")
+
+    assert source_url == (
+        f"{repo}/blob/main/blueprints/automation/ffbb_tracker/{filename}"
+    )

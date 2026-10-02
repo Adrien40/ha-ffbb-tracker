@@ -34,11 +34,7 @@ from custom_components.ffbb_tracker.api import (
     FFBBConnectionError,
     FFBBNotFoundError,
 )
-from custom_components.ffbb_tracker.config_flow import (
-    RAW_ID_PATTERN,
-    URL_ID_PATTERN,
-    FFBBTrackerConfigFlow,
-)
+from custom_components.ffbb_tracker.config_flow import FFBBTrackerConfigFlow
 from custom_components.ffbb_tracker.const import (
     CONF_COMPETITION_NAME,
     CONF_ENGAGEMENT_ID,
@@ -56,6 +52,7 @@ from custom_components.ffbb_tracker.const import (
     DOMAIN,
     MAX_SCAN_INTERVAL,
 )
+from custom_components.ffbb_tracker.team_picker import RAW_ID_PATTERN, URL_ID_PATTERN
 
 SAMPLE_ENGAGEMENT = {
     "id": "123456",

@@ -1359,3 +1359,36 @@ def test_rank_sensor_standings_is_excluded_from_the_recorder(hass):
     assert "standings" in sensor._unrecorded_attributes
     assert _recorded_size(sensor) < _RECORDER_MAX_ATTRIBUTES_BYTES
     assert len(sensor.extra_state_attributes["standings"]) == 14
+
+
+# ---------------------------------------------------------------------------
+# match_number on the next-match sensors the blueprint triggers on
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "sensor_class",
+    [FFBBNextMatchDateSensor, FFBBNextMatchOpponentSensor, FFBBNextMatchLocationSensor],
+)
+def test_the_three_sensors_the_blueprint_watches_expose_the_match_number(
+    hass, sensor_class
+):
+    """The notifications blueprint triggers on these three sensors and tells a
+    new match from an update by comparing the match number before and after,
+    so each of them must carry it."""
+    coordinator = _make_coordinator(hass)
+    coordinator.data = _make_team_data(next_match=_make_match(match_number="11549"))
+
+    attributes = sensor_class(coordinator).extra_state_attributes
+
+    assert attributes["match_number"] == "11549"
+
+
+@pytest.mark.parametrize(
+    "sensor_class", [FFBBNextMatchOpponentSensor, FFBBNextMatchLocationSensor]
+)
+def test_match_number_disappears_with_the_match(hass, sensor_class):
+    coordinator = _make_coordinator(hass)
+    coordinator.data = _make_team_data(next_match=None)
+
+    assert sensor_class(coordinator).extra_state_attributes == {}

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
 
 import voluptuous as vol
@@ -13,7 +12,6 @@ from homeassistant.config_entries import (
     ConfigFlowResult,
     OptionsFlow,
 )
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     BooleanSelector,
@@ -23,22 +21,12 @@ from homeassistant.helpers.selector import (
 )
 
 from . import get_rate_limiter
-from .api import (
-    FFBBApiError,
-    FFBBClient,
-    FFBBConnectionError,
-    FFBBNotFoundError,
-)
+from .api import FFBBClient
 from .const import (
-    CONF_COMPETITION_NAME,
-    CONF_ENGAGEMENT_ID,
     CONF_LIVE_POLLING,
     CONF_LIVE_SCAN_INTERVAL,
     CONF_LIVE_WINDOW_AFTER_HOURS,
-    CONF_ORGANISME_ID,
-    CONF_POULE_ID,
     CONF_SCAN_INTERVAL,
-    CONF_TEAM_NAME,
     DEFAULT_LIVE_POLLING,
     DEFAULT_LIVE_SCAN_INTERVAL,
     DEFAULT_LIVE_WINDOW_AFTER_HOURS,
@@ -51,13 +39,19 @@ from .const import (
     MIN_LIVE_WINDOW_AFTER_HOURS,
     MIN_SCAN_INTERVAL,
 )
-
-MIN_SEARCH_QUERY_LENGTH = 2
+from .team_picker import (
+    MIN_SEARCH_QUERY_LENGTH,
+    build_entry,
+    club_options,
+    club_teams,
+    engagement_id_from_query,
+    lookup_engagement,
+    remove_stale_devices,
+    search_clubs,
+    team_options,
+)
 
 _LOGGER = logging.getLogger(__name__)
-
-URL_ID_PATTERN = re.compile(r"/[eé]quipes?(?:/[^/\s]+)*/(\d+)/?", re.IGNORECASE)
-RAW_ID_PATTERN = re.compile(r"^\d+$")
 
 
 class FFBBTrackerConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -101,32 +95,22 @@ class FFBBTrackerConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             query = user_input["search_query"].strip()
-            url_match = URL_ID_PATTERN.search(query)
-            is_raw_id = RAW_ID_PATTERN.match(query)
+            engagement_id = engagement_id_from_query(query)
 
-            if not url_match and not is_raw_id and len(query) < MIN_SEARCH_QUERY_LENGTH:
+            if engagement_id is None and len(query) < MIN_SEARCH_QUERY_LENGTH:
                 errors["base"] = "query_too_short"
             else:
                 client = self._get_api_client()
 
-                if url_match:
-                    return await self._async_handle_engagement_id(url_match.group(1))
+                if engagement_id is not None:
+                    return await self._async_handle_engagement_id(engagement_id)
 
-                if is_raw_id:
-                    return await self._async_handle_engagement_id(query)
-
-                try:
-                    clubs = await client.search_clubs(query)
-                    if not clubs:
-                        errors["base"] = "no_clubs_found"
-                    else:
-                        self._clubs = clubs
-                        return await self.async_step_club()
-                except FFBBConnectionError:
-                    errors["base"] = "cannot_connect"
-                except FFBBApiError as err:
-                    _LOGGER.error("Error during club search: %s", err)
-                    errors["base"] = "unknown"
+                clubs, error = await search_clubs(client, query)
+                if error:
+                    errors["base"] = error
+                else:
+                    self._clubs = clubs
+                    return await self.async_step_club()
 
         schema = vol.Schema({vol.Required("search_query"): str})
         return self.async_show_form(
@@ -151,32 +135,16 @@ class FFBBTrackerConfigFlow(ConfigFlow, domain=DOMAIN):
             if not self._selected_club:
                 return self.async_abort(reason="club_not_found")
 
-            client = self._get_api_client()
-            try:
-                engagements = await client.get_club_engagements(selected_id)
-                valid_engagements = [
-                    eng
-                    for eng in engagements
-                    if eng.get("idPoule") and eng["idPoule"].get("id")
-                ]
+            engagements, error = await club_teams(self._get_api_client(), selected_id)
+            if error:
+                errors["base"] = error
+            else:
+                self._engagements = engagements
+                return await self.async_step_team()
 
-                if not valid_engagements:
-                    errors["base"] = "no_teams_found"
-                else:
-                    self._engagements = valid_engagements
-                    return await self.async_step_team()
-            except FFBBConnectionError:
-                errors["base"] = "cannot_connect"
-            except FFBBApiError as err:
-                _LOGGER.error("Error retrieving club engagements: %s", err)
-                errors["base"] = "unknown"
-
-        club_options = {
-            str(club["id"]): f"{club.get('nom', 'Club')} ({club.get('code', 'N/A')})"
-            for club in self._clubs
-        }
-
-        schema = vol.Schema({vol.Required("club_id"): vol.In(club_options)})
+        schema = vol.Schema(
+            {vol.Required("club_id"): vol.In(club_options(self._clubs))}
+        )
         return self.async_show_form(
             step_id="club",
             data_schema=schema,
@@ -201,39 +169,17 @@ class FFBBTrackerConfigFlow(ConfigFlow, domain=DOMAIN):
             )
 
             if selected_engagement:
-                team_name = selected_engagement.get("nom", "Équipe")
-                competition = selected_engagement.get("idCompetition") or {}
-                competition_name = competition.get("nom", "Compétition")
-                poule = selected_engagement.get("idPoule") or {}
-                poule_id = str(poule.get("id"))
                 organisme_id = (
                     str(self._selected_club.get("id")) if self._selected_club else ""
                 )
-
-                data = {
-                    CONF_ENGAGEMENT_ID: engagement_id,
-                    CONF_TEAM_NAME: team_name,
-                    CONF_COMPETITION_NAME: competition_name,
-                    CONF_POULE_ID: poule_id,
-                    CONF_ORGANISME_ID: organisme_id,
-                }
-                title = f"{team_name} - {competition_name}"
-
+                data, title = build_entry(
+                    selected_engagement, engagement_id, organisme_id
+                )
                 return await self._finalize_entry(engagement_id, data, title)
 
-        team_options = {}
-        for eng in self._engagements:
-            team_name = eng.get("nom", "Équipe")
-            comp = eng.get("idCompetition") or {}
-            comp_name = comp.get("nom", "Compétition")
-            poule = eng.get("idPoule") or {}
-            poule_name = poule.get("nom", "")
-            label = f"{team_name} — {comp_name}"
-            if poule_name:
-                label += f" ({poule_name})"
-            team_options[str(eng["id"])] = label
-
-        schema = vol.Schema({vol.Required("engagement_id"): vol.In(team_options)})
+        schema = vol.Schema(
+            {vol.Required("engagement_id"): vol.In(team_options(self._engagements))}
+        )
         return self.async_show_form(
             step_id="team",
             data_schema=schema,
@@ -242,53 +188,20 @@ class FFBBTrackerConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def _async_handle_engagement_id(self, engagement_id: str) -> ConfigFlowResult:
         """Create or update an entry from a validated engagement ID."""
-        client = self._get_api_client()
-        try:
-            engagement = await client.get_engagement(engagement_id)
-        except FFBBNotFoundError:
+        engagement, error = await lookup_engagement(
+            self._get_api_client(), engagement_id
+        )
+        if engagement is None:
             return self.async_show_form(
                 step_id="user",
                 data_schema=vol.Schema({vol.Required("search_query"): str}),
-                errors={"base": "invalid_engagement"},
-            )
-        except FFBBConnectionError:
-            return self.async_show_form(
-                step_id="user",
-                data_schema=vol.Schema({vol.Required("search_query"): str}),
-                errors={"base": "cannot_connect"},
-            )
-        except FFBBApiError as err:
-            _LOGGER.error("Direct engagement retrieval error: %s", err)
-            return self.async_show_form(
-                step_id="user",
-                data_schema=vol.Schema({vol.Required("search_query"): str}),
-                errors={"base": "unknown"},
+                errors={"base": error or "unknown"},
             )
 
-        poule = engagement.get("idPoule") or {}
-        poule_id = poule.get("id")
-        if not poule_id:
-            return self.async_show_form(
-                step_id="user",
-                data_schema=vol.Schema({vol.Required("search_query"): str}),
-                errors={"base": "no_poule_found"},
-            )
-
-        team_name = engagement.get("nom", "Équipe")
-        competition = engagement.get("idCompetition") or {}
-        competition_name = competition.get("nom", "Compétition")
         organisme = engagement.get("idOrganisme") or {}
-        organisme_id = str(organisme.get("id", ""))
-
-        data = {
-            CONF_ENGAGEMENT_ID: engagement_id,
-            CONF_TEAM_NAME: team_name,
-            CONF_COMPETITION_NAME: competition_name,
-            CONF_POULE_ID: str(poule_id),
-            CONF_ORGANISME_ID: organisme_id,
-        }
-        title = f"{team_name} - {competition_name}"
-
+        data, title = build_entry(
+            engagement, engagement_id, str(organisme.get("id", ""))
+        )
         return await self._finalize_entry(engagement_id, data, title)
 
     async def _finalize_entry(
@@ -310,12 +223,7 @@ class FFBBTrackerConfigFlow(ConfigFlow, domain=DOMAIN):
             ):
                 return self.async_abort(reason="already_configured")
 
-            dev_reg = dr.async_get(self.hass)
-            for device_entry in dr.async_entries_for_config_entry(
-                dev_reg, self._reconfigure_entry.entry_id
-            ):
-                if (DOMAIN, engagement_id) not in device_entry.identifiers:
-                    dev_reg.async_remove_device(device_entry.id)
+            remove_stale_devices(self.hass, self._reconfigure_entry, engagement_id)
 
             return self.async_update_reload_and_abort(
                 self._reconfigure_entry,

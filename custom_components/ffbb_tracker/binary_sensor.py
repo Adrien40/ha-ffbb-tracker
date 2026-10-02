@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import FFBBConfigEntry
-from .const import DOMAIN
+from .const import ATTRIBUTION
 from .coordinator import FFBBDataUpdateCoordinator
+from .entity import team_device_info
 
 # Entities are read-only views over coordinator.data (a single shared poll
 # per team); there is no per-entity network I/O to throttle here.
@@ -38,19 +38,13 @@ class FFBBBaseBinarySensor(
     """Common device wiring shared by the FFBB Tracker binary sensors."""
 
     _attr_has_entity_name = True
-    _attr_attribution = "Données fournies par competitions.ffbb.com"
+    _attr_attribution = ATTRIBUTION
 
     def __init__(self, coordinator: FFBBDataUpdateCoordinator, key: str) -> None:
         """Initialize the binary sensor entity."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.engagement_id}_{key}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.engagement_id)},
-            name=f"{coordinator.team_name} - {coordinator.competition_name}",
-            manufacturer="FFBB",
-            model=coordinator.competition_name,
-            entry_type=DeviceEntryType.SERVICE,
-        )
+        self._attr_device_info = team_device_info(coordinator)
 
 
 class FFBBGameDayBinarySensor(FFBBBaseBinarySensor):

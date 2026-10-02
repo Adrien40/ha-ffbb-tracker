@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Final
-from urllib.parse import quote
 
 from homeassistant.components.sensor import (
     RestoreSensor,
@@ -14,30 +13,27 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import ExtraStoredData
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import FFBBConfigEntry
 from .const import (
-    ATTR_GOOGLE_MAPS_URL,
     ATTR_GYM_ADDRESS,
     ATTR_GYM_CITY,
     ATTR_GYM_NAME,
     ATTR_IS_HOME,
     ATTR_IS_STALE,
     ATTR_MATCH_DATE,
-    ATTR_NAVIGATION_URL,
     ATTR_OPPONENT_LOGO_URL,
     ATTR_OPPONENT_SCORE,
     ATTR_STANDINGS,
     ATTR_TEAM_LOGO_URL,
     ATTR_TEAM_SCORE,
-    ATTR_WAZE_URL,
-    DOMAIN,
+    ATTRIBUTION,
 )
 from .coordinator import FFBBDataUpdateCoordinator
+from .entity import navigation_attributes, team_device_info
 
 PARALLEL_UPDATES = 0
 
@@ -103,7 +99,7 @@ class FFBBSensorBase(CoordinatorEntity[FFBBDataUpdateCoordinator], SensorEntity)
     """Base class for FFBB Tracker sensors."""
 
     _attr_has_entity_name = True
-    _attr_attribution = "Données fournies par competitions.ffbb.com"
+    _attr_attribution = ATTRIBUTION
 
     def __init__(
         self,
@@ -114,13 +110,7 @@ class FFBBSensorBase(CoordinatorEntity[FFBBDataUpdateCoordinator], SensorEntity)
         super().__init__(coordinator)
         self._sensor_type = sensor_type
         self._attr_unique_id = f"{coordinator.engagement_id}_{sensor_type}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.engagement_id)},
-            name=f"{coordinator.team_name} - {coordinator.competition_name}",
-            manufacturer="FFBB",
-            model=coordinator.competition_name,
-            entry_type=DeviceEntryType.SERVICE,
-        )
+        self._attr_device_info = team_device_info(coordinator)
 
 
 class FFBBNextMatchDateSensor(FFBBSensorBase):
@@ -188,6 +178,7 @@ class FFBBNextMatchOpponentSensor(FFBBSensorBase):
 
         match = self.coordinator.data.next_match
         attrs: dict[str, Any] = {
+            "match_number": match.match_number,
             "opponent_club_id": match.opponent_club_id,
             "team_url": match.team_url,
             "opponent_url": match.opponent_url,
@@ -196,21 +187,11 @@ class FFBBNextMatchOpponentSensor(FFBBSensorBase):
             ATTR_GYM_ADDRESS: match.gym_address,
             ATTR_GYM_CITY: match.gym_city,
             "formatted_address": match.formatted_address,
-            ATTR_NAVIGATION_URL: None,
-            ATTR_GOOGLE_MAPS_URL: None,
-            ATTR_WAZE_URL: None,
+            **navigation_attributes(match.formatted_address),
             ATTR_TEAM_LOGO_URL: match.team_logo_url,
             ATTR_OPPONENT_LOGO_URL: match.opponent_logo_url,
             ATTR_IS_STALE: match.is_stale,
         }
-
-        if match.formatted_address:
-            encoded = quote(match.formatted_address)
-            attrs[ATTR_NAVIGATION_URL] = f"geo:0,0?q={encoded}"
-            attrs[ATTR_GOOGLE_MAPS_URL] = (
-                f"https://www.google.com/maps/dir/?api=1&destination={encoded}"
-            )
-            attrs[ATTR_WAZE_URL] = f"https://www.waze.com/ul?q={encoded}&navigate=yes"
 
         return attrs
 
@@ -276,25 +257,16 @@ class FFBBNextMatchLocationSensor(FFBBSensorBase):
 
         match = self.coordinator.data.next_match
         attrs: dict[str, Any] = {
+            "match_number": match.match_number,
             ATTR_IS_HOME: match.is_home,
             ATTR_GYM_NAME: match.gym_name,
             ATTR_GYM_ADDRESS: match.gym_address,
             ATTR_GYM_CITY: match.gym_city,
-            ATTR_NAVIGATION_URL: None,
-            ATTR_GOOGLE_MAPS_URL: None,
-            ATTR_WAZE_URL: None,
+            **navigation_attributes(match.formatted_address),
             ATTR_TEAM_LOGO_URL: match.team_logo_url,
             ATTR_OPPONENT_LOGO_URL: match.opponent_logo_url,
             ATTR_IS_STALE: match.is_stale,
         }
-
-        if match.formatted_address:
-            encoded = quote(match.formatted_address)
-            attrs[ATTR_NAVIGATION_URL] = f"geo:0,0?q={encoded}"
-            attrs[ATTR_GOOGLE_MAPS_URL] = (
-                f"https://www.google.com/maps/dir/?api=1&destination={encoded}"
-            )
-            attrs[ATTR_WAZE_URL] = f"https://www.waze.com/ul?q={encoded}&navigate=yes"
 
         return attrs
 

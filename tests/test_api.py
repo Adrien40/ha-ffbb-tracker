@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import UTC, datetime, timedelta
+from email.utils import format_datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
@@ -698,3 +700,257 @@ async def test_extra_headers_survive_the_401_retry():
     assert "Cache-Control" not in calls[1].kwargs["headers"]
     assert calls[2].kwargs["headers"]["Cache-Control"] == "no-cache"
     assert seen == {"age": "0"}
+
+
+# --- transient HTTP failures: bounded retry, short error messages -----------
+
+SLEEP = "custom_components.ffbb_tracker.api.asyncio.sleep"
+
+
+def _client_with(*responses, rate_limiter=None) -> tuple[FFBBClient, MagicMock]:
+    session = MagicMock()
+    session.get = MagicMock(side_effect=list(responses))
+    return FFBBClient(session, rate_limiter=rate_limiter), session
+
+
+@pytest.mark.asyncio
+async def test_rate_limited_request_waits_as_long_as_the_server_asks():
+    client, session = _client_with(
+        _mock_response(429, headers={"Retry-After": "3"}),
+        _mock_response(200, {"data": {"id": "ok"}}),
+    )
+
+    with patch(SLEEP, new_callable=AsyncMock) as sleep:
+        result = await client._request("items/foo")
+
+    assert result == {"id": "ok"}
+    sleep.assert_awaited_once_with(3.0)
+    assert session.get.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_unavailable_server_is_retried_with_exponential_backoff():
+    client, _ = _client_with(
+        _mock_response(503),
+        _mock_response(503),
+        _mock_response(200, {"data": {"id": "ok"}}),
+    )
+
+    with patch(SLEEP, new_callable=AsyncMock) as sleep:
+        result = await client._request("items/foo")
+
+    assert result == {"id": "ok"}
+    assert [c.args[0] for c in sleep.await_args_list] == [1.0, 2.0]
+
+
+@pytest.mark.asyncio
+async def test_gives_up_after_the_retries_and_reports_the_status():
+    client, session = _client_with(
+        _mock_response(503, text="Service Unavailable"),
+        _mock_response(503, text="Service Unavailable"),
+        _mock_response(503, text="Service Unavailable"),
+    )
+
+    with (
+        patch(SLEEP, new_callable=AsyncMock) as sleep,
+        pytest.raises(FFBBApiError, match="HTTP 503: Service Unavailable"),
+    ):
+        await client._request("items/foo")
+
+    assert session.get.call_count == 3  # the first attempt + 2 retries
+    assert sleep.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_a_retry_after_beyond_the_cap_fails_at_once_without_waiting():
+    """Holding an update for minutes is worse than failing and letting the
+    next scheduled poll try again."""
+    client, session = _client_with(_mock_response(429, headers={"Retry-After": "120"}))
+
+    with (
+        patch(SLEEP, new_callable=AsyncMock) as sleep,
+        pytest.raises(FFBBApiError, match=r"HTTP 429 \(Retry-After: 120\)"),
+    ):
+        await client._request("items/foo")
+
+    sleep.assert_not_awaited()
+    assert session.get.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_retry_after_can_be_an_http_date():
+    when = format_datetime(datetime.now(UTC) + timedelta(seconds=5), usegmt=True)
+    client, _ = _client_with(
+        _mock_response(429, headers={"Retry-After": when}),
+        _mock_response(200, {"data": {}}),
+    )
+
+    with patch(SLEEP, new_callable=AsyncMock) as sleep:
+        await client._request("items/foo")
+
+    waited = sleep.await_args.args[0]
+    assert 0 < waited <= 5
+
+
+@pytest.mark.asyncio
+async def test_retry_after_in_the_past_means_no_wait():
+    when = format_datetime(datetime.now(UTC) - timedelta(minutes=5), usegmt=True)
+    client, _ = _client_with(
+        _mock_response(429, headers={"Retry-After": when}),
+        _mock_response(200, {"data": {}}),
+    )
+
+    with patch(SLEEP, new_callable=AsyncMock) as sleep:
+        await client._request("items/foo")
+
+    sleep.assert_awaited_once_with(0.0)
+
+
+@pytest.mark.parametrize("value", ["soon", "   ", "Mon, 99 Foo 2026"])
+@pytest.mark.asyncio
+async def test_unusable_retry_after_falls_back_to_the_backoff(value):
+    client, _ = _client_with(
+        _mock_response(503, headers={"Retry-After": value}),
+        _mock_response(200, {"data": {}}),
+    )
+
+    with patch(SLEEP, new_callable=AsyncMock) as sleep:
+        await client._request("items/foo")
+
+    sleep.assert_awaited_once_with(1.0)
+
+
+@pytest.mark.parametrize("status", [429, 502, 503, 504])
+@pytest.mark.asyncio
+async def test_transient_statuses_are_retried(status):
+    client, session = _client_with(
+        _mock_response(status), _mock_response(200, {"data": {}})
+    )
+
+    with patch(SLEEP, new_callable=AsyncMock):
+        await client._request("items/foo")
+
+    assert session.get.call_count == 2
+
+
+@pytest.mark.parametrize("status", [400, 418, 500])
+@pytest.mark.asyncio
+async def test_other_error_statuses_are_not_retried(status):
+    client, session = _client_with(_mock_response(status, text="nope"))
+
+    with (
+        patch(SLEEP, new_callable=AsyncMock) as sleep,
+        pytest.raises(FFBBApiError, match=f"HTTP {status}: nope"),
+    ):
+        await client._request("items/foo")
+
+    sleep.assert_not_awaited()
+    assert session.get.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_error_pages_are_reduced_to_a_short_plain_text_message():
+    page = "<html><head><title>x</title></head><body><h1>Bad gateway</h1>" + "y" * 5000
+    client, _ = _client_with(_mock_response(500, text=page))
+
+    with pytest.raises(FFBBApiError) as err:
+        await client._request("items/foo")
+
+    message = str(err.value)
+    assert len(message) < 300
+    assert "<" not in message
+    assert "Bad gateway" in message
+    assert message.endswith("…")
+
+
+@pytest.mark.asyncio
+async def test_a_short_plain_error_body_is_kept_as_is():
+    client, _ = _client_with(_mock_response(400, text="Invalid query"))
+
+    with pytest.raises(FFBBApiError, match=r"HTTP 400: Invalid query$"):
+        await client._request("items/foo")
+
+
+@pytest.mark.asyncio
+async def test_rate_limiter_paces_each_retry():
+    limiter = MagicMock()
+    limiter.throttle = AsyncMock()
+    client, _ = _client_with(
+        _mock_response(503),
+        _mock_response(503),
+        _mock_response(200, {"data": {}}),
+        rate_limiter=limiter,
+    )
+
+    with patch(SLEEP, new_callable=AsyncMock):
+        await client._request("items/foo")
+
+    assert limiter.throttle.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_every_http_attempt_has_its_own_timeout():
+    """The token refresh and the retry used to run inside the first request's
+    15 s budget; each attempt must now get its own, never nested."""
+    depth = {"now": 0, "max": 0, "count": 0}
+
+    class _SpyTimeout:
+        def __init__(self, *_args) -> None:
+            pass
+
+        async def __aenter__(self):
+            depth["now"] += 1
+            depth["count"] += 1
+            depth["max"] = max(depth["max"], depth["now"])
+
+        async def __aexit__(self, *_exc):
+            depth["now"] -= 1
+            return False
+
+    client, _ = _client_with(
+        _mock_response(401),
+        _mock_response(200, {"data": {"key_directus_website": "new-token"}}),
+        _mock_response(200, {"data": {"id": "ok"}}),
+    )
+
+    with patch("custom_components.ffbb_tracker.api.asyncio.timeout", _SpyTimeout):
+        await client._request("items/foo")
+
+    assert depth["count"] == 3
+    assert depth["max"] == 1
+
+
+@pytest.mark.asyncio
+async def test_a_401_after_a_transient_failure_still_refreshes_the_token():
+    client, session = _client_with(
+        _mock_response(503),
+        _mock_response(401),
+        _mock_response(200, {"data": {"key_directus_website": "new-token"}}),
+        _mock_response(200, {"data": {"id": "ok"}}),
+    )
+
+    with patch(SLEEP, new_callable=AsyncMock):
+        result = await client._request("items/foo")
+
+    assert result == {"id": "ok"}
+    assert session.get.call_count == 4
+
+
+@pytest.mark.asyncio
+async def test_a_retried_request_keeps_its_extra_headers_and_captures_the_answer():
+    client, session = _client_with(
+        _mock_response(503, headers={"Age": "999"}),
+        _mock_response(200, {"data": {"id": "ok"}}, headers={"Age": "0"}),
+    )
+    seen: dict[str, str] = {}
+
+    with patch(SLEEP, new_callable=AsyncMock):
+        await client._request(
+            "items/foo",
+            extra_headers={"Cache-Control": "no-cache"},
+            response_headers=seen,
+        )
+
+    for call in session.get.call_args_list:
+        assert call.kwargs["headers"]["Cache-Control"] == "no-cache"
+    assert seen == {"age": "0"}  # from the successful answer, not the 503

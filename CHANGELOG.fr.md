@@ -1,5 +1,39 @@
 # FFBB Tracker - Journal des modifications
 
+## 0.8.9
+
+🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀
+
+Cette version rend les mises à jour plus robustes face aux à-coups de l'API FFBB, corrige la réparation de changement de saison (elle n'affichait rien à l'utilisateur), et distingue un nouveau match d'une modification dans les notifications Telegram.
+
+### ✨ Nouveautés
+- L'attribut `match_number`, déjà présent sur le capteur de date du prochain match, l'est maintenant aussi sur les capteurs adversaire et lieu du prochain match. Le blueprint de notifications s'en sert (voir plus bas).
+- Le blueprint de notifications peut maintenant être mis à jour avec *Réimporter le blueprint*, comme celui de résultat : il déclare son URL source.
+
+### 🐛 Corrections
+- **La réparation de changement de saison ne faisait rien de visible.** Son bouton lançait la reconfiguration en arrière-plan, et Home Assistant n'affiche pas les flux lancés ainsi. La recherche d'équipe se fait maintenant dans la fenêtre de réparation : recherche par nom de club, URL ou identifiant d'équipe, choix de l'équipe, et l'entrée existante est basculée sur ses nouveaux identifiants (l'appareil de l'ancienne équipe est supprimé et l'entrée est rechargée). Elle réutilise la recherche du flux de configuration, donc les deux se comportent pareil. Deux défauts plus petits de cette fenêtre sont aussi corrigés : la première étape transmettait à l'étape de confirmation les données avec lesquelles Home Assistant démarre tout flux, qui les prenait pour une réponse et sautait l'explication, et les textes ne recevaient jamais le nom de l'équipe.
+- **Le blueprint de notifications disait « Mise à jour du match » quand un nouveau match prenait la place du précédent** (par exemple juste après un résultat), au lieu de « Nouveau match programmé ». Il compare maintenant le numéro de match avant et après : un autre numéro est un nouveau match, le même numéro avec d'autres valeurs est une mise à jour.
+
+### 🛡️ Renforcement
+- **Les erreurs transitoires de l'API sont rejouées.** Les erreurs HTTP 429, 502, 503 et 504 sont rejouées jusqu'à deux fois, après le délai demandé par le serveur (`Retry-After`, en secondes ou sous forme de date) ou, sans indication, après 1 puis 2 secondes. Un serveur qui demande plus de 10 secondes fait échouer la mise à jour tout de suite au lieu de la retenir ; la prochaine interrogation prévue réessaie.
+- **Chaque tentative HTTP a son propre délai de 15 s.** Le rafraîchissement du jeton et la nouvelle tentative partageaient le délai de la première requête.
+- **Les messages d'erreur sont courts.** Une page d'erreur d'un proxy ou d'un CDN est réduite à du texte brut et coupée à 200 caractères, au lieu de remplir les journaux de HTML.
+- **Les équipes d'une même poule n'attendent plus le même échec l'une après l'autre.** Quand une requête de poule échoue, les équipes qui attendaient derrière reçoivent cet échec immédiatement, au lieu de refaire chacune la requête et d'attendre le même délai. Une actualisation lancée ensuite interroge toujours l'API elle-même, donc le bouton *Actualiser* et la prochaine interrogation ne sont jamais bloqués.
+
+### 🧰 Maintenance
+- La compatibilité avec la plus ancienne version de Home Assistant prise en charge est maintenant vérifiée : la suite passe sur Home Assistant 2026.3.0 (le minimum de `hacs.json`) et 2026.3.1, ainsi que sur la dernière version, sans aucune modification de l'intégration. `tests.yaml` a un second job qui lance la suite sur 2026.3.1 (`requirements_test_min.txt`) ; l'outil de test n'a pas de version pour 2026.3.0 elle-même, c'est donc le premier correctif qu'il prend en charge.
+- Code partagé : les cinq plateformes construisent leur appareil, et les deux capteurs de lieu leurs liens de navigation, en un seul endroit (`entity.py`), et la recherche d'équipe est partagée par le flux de configuration et la réparation (`team_picker.py`). Le comportement est inchangé. Une garde inatteignable du code d'interrogation est supprimée.
+- Suite de tests passée de 401 à 473 tests, 99 % de couverture. La réparation de changement de saison est couverte de bout en bout par le gestionnaire de réparations de Home Assistant lui-même, la couche qui décide de ce que la fenêtre affiche et que les tests précédents n'exerçaient pas. De nouveaux tests de cohérence vérifient la configuration de test de la version minimale par rapport à `hacs.json` et au workflow.
+
+### 📚 Documentation
+- README : nouvelle entrée *Comment l'intégration s'identifie* dans les limites, qui explique la clé d'accès publique et les en-têtes de navigateur utilisés, et qu'elle n'utilise jamais d'identifiants. Les descriptions de la réparation de changement de saison correspondent maintenant à son fonctionnement.
+
+### 📋 Notes de mise à jour
+- **Mettez à jour le blueprint de notifications** (`match_notifications_telegram.yaml`) pour obtenir la formulation « Nouveau match programmé ». Home Assistant ne met pas les blueprints à jour avec l'intégration. Il déclare maintenant son URL source : après avoir remplacé votre copie une fois, *Réimporter le blueprint* fonctionne aussi pour lui.
+- Dans le pire des cas, une mise à jour peut maintenant durer plus longtemps quand l'API peine (jusqu'à deux attentes de 10 secondes). Elle réussit plus souvent au lieu d'échouer et d'attendre la prochaine interrogation.
+
+🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀
+
 ## 0.8.8
 
 🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀
