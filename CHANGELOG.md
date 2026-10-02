@@ -22,7 +22,8 @@ This release fixes five bugs found in an audit (the gym postal code, a recorder 
 - Typing: CI now runs `mypy --strict` in its own *Typing* workflow, as the Platinum `strict-typing` rule already claimed (it was only run without `--strict` before). It passes with zero errors.
 - Releases: pushing a version tag (`v0.8.7`) publishes the GitHub release from this changelog, with the French section folded in. The tag must match the manifest version and this file must contain a matching `## 0.8.7` section, otherwise the release fails instead of publishing empty notes (`scripts/release_notes.py`).
 - `pyproject.toml` scopes coverage to the integration (`pytest --cov` with no argument), and `mypy` is added to `requirements_test.txt`.
-- Test suite grown from 256 to 346 tests, 99 % coverage: blueprint rendering tests (the real blueprint files, evaluated in the Europe/Paris time zone), service lifecycle tests, release script tests, and consistency tests that keep the README badges, the changelogs, the workflows and `quality_scale.yaml` in line with the repository.
+- The manifest now declares `quality_scale: platinum`, matching the README badge. hassfest only checks `quality_scale.yaml` for core integrations, so tests keep it consistent instead: it must list exactly the 54 rules of Home Assistant 2026.9.2, with none left open and a reason for every exemption.
+- Test suite grown from 256 to 350 tests, 99 % coverage: blueprint rendering tests (the real blueprint files, evaluated in the Europe/Paris time zone), service lifecycle tests, release script tests, and consistency tests that keep the README badges, the changelogs, the workflows and `quality_scale.yaml` in line with the repository.
 - The test fixture now mirrors the real API shape for the gym postal code, which is why the missing field was never caught before.
 - `quality_scale.yaml` updated to reflect where the actions are registered.
 

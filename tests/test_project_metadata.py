@@ -214,6 +214,90 @@ def _status(rule: object) -> str:
     return rule["status"] if isinstance(rule, dict) else str(rule)
 
 
+# Rules Home Assistant 2026.9.2 defines in script/hassfest/quality_scale.py.
+# hassfest only checks `quality_scale.yaml` for core integrations, so for this
+# custom integration the tests below are the only enforcement. Update this
+# list when Home Assistant adds a rule.
+HA_QUALITY_SCALE_RULES = frozenset(
+    {
+        "action-setup",
+        "appropriate-polling",
+        "brands",
+        "common-modules",
+        "config-flow",
+        "config-flow-test-coverage",
+        "dependency-transparency",
+        "docs-actions",
+        "docs-conditions",
+        "docs-high-level-description",
+        "docs-installation-instructions",
+        "docs-removal-instructions",
+        "docs-triggers",
+        "entity-event-setup",
+        "entity-unique-id",
+        "has-entity-name",
+        "runtime-data",
+        "test-before-configure",
+        "test-before-setup",
+        "unique-config-entry",
+        "action-exceptions",
+        "config-entry-unloading",
+        "docs-configuration-parameters",
+        "docs-installation-parameters",
+        "entity-unavailable",
+        "integration-owner",
+        "log-when-unavailable",
+        "parallel-updates",
+        "reauthentication-flow",
+        "test-coverage",
+        "devices",
+        "diagnostics",
+        "discovery",
+        "discovery-update-info",
+        "docs-data-update",
+        "docs-examples",
+        "docs-known-limitations",
+        "docs-supported-devices",
+        "docs-supported-functions",
+        "docs-troubleshooting",
+        "docs-use-cases",
+        "dynamic-devices",
+        "entity-category",
+        "entity-device-class",
+        "entity-disabled-by-default",
+        "entity-translations",
+        "exception-translations",
+        "icon-translations",
+        "reconfiguration-flow",
+        "repair-issues",
+        "stale-devices",
+        "async-dependency",
+        "inject-websession",
+        "strict-typing",
+    }
+)
+
+
+def test_manifest_declares_the_platinum_quality_scale():
+    assert MANIFEST["quality_scale"] == "platinum"
+
+
+@pytest.mark.parametrize("readme", READMES)
+def test_readme_badge_shows_the_tier_declared_in_the_manifest(readme):
+    match = re.search(r"HA%20Quality%20Scale-([A-Za-z]+)", _text(readme))
+
+    assert match, f"{readme}: no quality scale badge"
+    assert match.group(1).lower() == MANIFEST["quality_scale"]
+
+
+def test_quality_scale_lists_exactly_the_rules_of_home_assistant():
+    """Every rule of every tier up to Platinum is present, and none invented."""
+    rules = set(_quality_rules())
+
+    assert HA_QUALITY_SCALE_RULES - rules == set(), "rules missing from the file"
+    assert rules - HA_QUALITY_SCALE_RULES == set(), "rules unknown to Home Assistant"
+
+
 def test_quality_scale_has_no_open_rule():
     """The README advertises the Platinum tier: nothing may be left `todo`."""
     open_rules = [
