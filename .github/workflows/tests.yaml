@@ -27,3 +27,26 @@ jobs:
 
       - name: Run tests with coverage
         run: pytest --cov --cov-fail-under=95
+
+  # The suite must also pass on the oldest Home Assistant the integration
+  # declares (hacs.json). The coverage gate runs on the latest release above;
+  # here the point is only that nothing relies on a newer Home Assistant.
+  pytest-min-ha:
+    name: pytest (oldest supported Home Assistant)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements_test_min.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements_test_min.txt
+
+      - name: Run tests
+        run: pytest
