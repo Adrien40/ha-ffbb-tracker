@@ -38,6 +38,12 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
+[tool.coverage.run]
+source = ["custom_components/ffbb_tracker"]
+
+[tool.coverage.report]
+show_missing = true
+
 [tool.mypy]
 python_version = "3.14"
 warn_unused_ignores = true
