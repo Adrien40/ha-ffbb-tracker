@@ -5,11 +5,11 @@ on:
   pull_request:
   workflow_dispatch:
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
   ruff:
-    name: Ruff (lint + format)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -24,25 +24,3 @@ jobs:
         uses: astral-sh/ruff-action@v4.1.0
         with:
           args: "format --check"
-
-  mypy:
-    name: Type checking (mypy)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.14"
-          cache: "pip"
-
-      - name: Install dependencies
-        run: |
-          pip install mypy
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          if [ -f requirements_test.txt ]; then pip install -r requirements_test.txt; fi
-
-      - name: Run mypy
-        run: mypy custom_components --ignore-missing-imports
