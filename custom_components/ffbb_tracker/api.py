@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Final
 
 import aiohttp
 
@@ -22,6 +22,75 @@ REFERER_URL = "https://competitions.ffbb.com/"
 
 # Default spacing between outbound requests when a rate limiter is active
 DEFAULT_RATE_LIMIT_DELAY = 0.5
+
+# Response headers kept for diagnostics: they tell whether an answer came from
+# a cache, and how old it is.
+_DIAGNOSTIC_RESPONSE_HEADERS: Final = (
+    "age",
+    "cache-control",
+    "date",
+    "etag",
+    "expires",
+    "last-modified",
+    "vary",
+    "via",
+    "x-cache",
+    "cf-cache-status",
+)
+
+# Request headers asking servers and intermediaries not to serve a stored copy.
+NO_CACHE_HEADERS: Final = {"Cache-Control": "no-cache", "Pragma": "no-cache"}
+
+# Fields requested for a poule, in the order of the normal request. Keep this
+# exact order for normal requests: their answers are known to be up to date
+# (see FFBBClient.get_poule_data's `refresh` argument).
+_POULE_FIELDS: Final = (
+    "id",
+    "nom",
+    "rencontres.id",
+    "rencontres.numero",
+    "rencontres.numeroJournee",
+    "rencontres.resultatEquipe1",
+    "rencontres.resultatEquipe2",
+    "rencontres.joue",
+    "rencontres.nomEquipe1",
+    "rencontres.nomEquipe2",
+    "rencontres.date_rencontre",
+    "rencontres.idEngagementEquipe1.id",
+    "rencontres.idEngagementEquipe2.id",
+    "rencontres.idOrganismeEquipe1.id",
+    "rencontres.idOrganismeEquipe1.nom",
+    "rencontres.idOrganismeEquipe1.code",
+    "rencontres.idOrganismeEquipe1.logo",
+    "rencontres.idOrganismeEquipe2.id",
+    "rencontres.idOrganismeEquipe2.nom",
+    "rencontres.idOrganismeEquipe2.code",
+    "rencontres.idOrganismeEquipe2.logo",
+    "rencontres.salle.id",
+    "rencontres.salle.libelle",
+    "rencontres.salle.adresse",
+    "rencontres.salle.commune.libelle",
+    "rencontres.salle.commune.codePostal",
+    "classements.id",
+    "classements.idEngagement.id",
+    "classements.idEngagement.nom",
+    "classements.idEngagement.idOrganisme.code",
+    "classements.matchJoues",
+    "classements.points",
+    "classements.position",
+    "classements.gagnes",
+    "classements.perdus",
+    "classements.nuls",
+    "classements.nombreForfaits",
+    "classements.nombreDefauts",
+    "classements.penalitesArbitrage",
+    "classements.penalitesEntraineur",
+    "classements.penalites",
+    "classements.quotient",
+    "classements.paniersMarques",
+    "classements.paniersEncaisses",
+    "classements.difference",
+)
 
 
 class FFBBApiError(Exception):
@@ -89,6 +158,20 @@ class FFBBClient:
         # back below, so a later re-occurrence warns again).
         self._warned_rencontres_limit: set[str] = set()
         self._warned_classements_limit: set[str] = set()
+        # Cache-related headers of the last poule answers ("normal" request,
+        # and "recheck" request of the outdated-response safety net).
+        self._last_poule_headers: dict[str, dict[str, str]] = {}
+
+    @property
+    def last_poule_headers(self) -> dict[str, dict[str, str]]:
+        """Return the cache-related headers of the last poule answers.
+
+        Keyed by request kind: "normal" and, when the safety net ran,
+        "recheck". Exposed in the diagnostics.
+        """
+        return {
+            kind: dict(headers) for kind, headers in self._last_poule_headers.items()
+        }
 
     @property
     def token_refresh_failures(self) -> int:
@@ -150,8 +233,14 @@ class FFBBClient:
         params: dict[str, Any] | None = None,
         auth: bool = True,
         retry: bool = True,
+        extra_headers: dict[str, str] | None = None,
+        response_headers: dict[str, str] | None = None,
     ) -> Any:
-        """Execute a GET request against the Directus API with automatic retry."""
+        """Execute a GET request against the Directus API with automatic retry.
+
+        `extra_headers` are added to the request. When `response_headers` is
+        given, the cache-related headers of the answer are copied into it.
+        """
         if self._rate_limiter:
             await self._rate_limiter.throttle()
 
@@ -165,6 +254,8 @@ class FFBBClient:
 
         if auth and self._token:
             headers["Authorization"] = f"Bearer {self._token}"
+        if extra_headers:
+            headers.update(extra_headers)
 
         try:
             async with (
@@ -181,7 +272,12 @@ class FFBBClient:
                     )
                     await self._refresh_token()
                     return await self._request(
-                        endpoint, params=params, auth=True, retry=False
+                        endpoint,
+                        params=params,
+                        auth=True,
+                        retry=False,
+                        extra_headers=extra_headers,
+                        response_headers=response_headers,
                     )
 
                 if response.status != 200:
@@ -189,6 +285,12 @@ class FFBBClient:
                     raise FFBBApiError(
                         f"FFBB API returned HTTP {response.status}: {text}"
                     )
+
+                if response_headers is not None:
+                    for name in _DIAGNOSTIC_RESPONSE_HEADERS:
+                        value = response.headers.get(name)
+                        if isinstance(value, str):
+                            response_headers[name] = value
 
                 payload = await response.json()
                 if not isinstance(payload, dict):
@@ -262,42 +364,48 @@ class FFBBClient:
             raise FFBBNotFoundError(f"Engagement {engagement_id} not found")
         return data
 
-    async def get_poule_data(self, poule_id: str) -> dict[str, Any]:
-        """Fetch fixtures and standings for a specific pool."""
+    async def get_poule_data(
+        self, poule_id: str, *, refresh: int = 0
+    ) -> dict[str, Any]:
+        """Fetch fixtures and standings for a specific pool.
+
+        The default request is the one every poll uses. A non-zero `refresh`
+        asks for the same data in a differently formulated request -- the same
+        fields in another order, a slightly different standings limit, and
+        `Cache-Control: no-cache` -- so that a stored copy of the normal
+        request cannot be served back. The coordinator uses it as a safety net
+        when a match result seems to be missing (the FFBB API once kept
+        serving a poule snapshot that predated published scores for one
+        request shape while answering correctly for another). Pass a value
+        that changes over time (e.g. the hour of the day) so successive
+        requests do not repeat the same shape.
+        """
         endpoint = f"items/ffbbserver_poules/{poule_id}"
+        ordered_fields = list(_POULE_FIELDS)
+        classements_limit = self._CLASSEMENTS_LIMIT
+        extra_headers: dict[str, str] | None = None
+        if refresh > 0:
+            rotation = 1 + refresh % (len(ordered_fields) - 1)
+            ordered_fields = ordered_fields[rotation:] + ordered_fields[:rotation]
+            classements_limit -= (refresh // (len(ordered_fields) - 1)) % 50
+            extra_headers = dict(NO_CACHE_HEADERS)
         params = {
-            "fields": (
-                "id,nom,"
-                "rencontres.id,rencontres.numero,rencontres.numeroJournee,"
-                "rencontres.resultatEquipe1,rencontres.resultatEquipe2,rencontres.joue,"
-                "rencontres.nomEquipe1,rencontres.nomEquipe2,rencontres.date_rencontre,"
-                "rencontres.idEngagementEquipe1.id,rencontres.idEngagementEquipe2.id,"
-                "rencontres.idOrganismeEquipe1.id,rencontres.idOrganismeEquipe1.nom,"
-                "rencontres.idOrganismeEquipe1.code,"
-                "rencontres.idOrganismeEquipe1.logo,"
-                "rencontres.idOrganismeEquipe2.id,rencontres.idOrganismeEquipe2.nom,"
-                "rencontres.idOrganismeEquipe2.code,"
-                "rencontres.idOrganismeEquipe2.logo,"
-                "rencontres.salle.id,rencontres.salle.libelle,rencontres.salle.adresse,"
-                "rencontres.salle.commune.libelle,rencontres.salle.commune.codePostal,"
-                "classements.id,classements.idEngagement.id,classements.idEngagement.nom,"
-                "classements.idEngagement.idOrganisme.code,"
-                "classements.matchJoues,classements.points,classements.position,"
-                "classements.gagnes,classements.perdus,classements.nuls,"
-                "classements.nombreForfaits,classements.nombreDefauts,"
-                "classements.penalitesArbitrage,classements.penalitesEntraineur,"
-                "classements.penalites,classements.quotient,"
-                "classements.paniersMarques,classements.paniersEncaisses,"
-                "classements.difference"
-            ),
+            "fields": ",".join(ordered_fields),
             "deep[rencontres][_limit]": self._RENCONTRES_LIMIT,
             "deep[rencontres][_sort]": "date_rencontre",
-            "deep[classements][_limit]": self._CLASSEMENTS_LIMIT,
+            "deep[classements][_limit]": classements_limit,
             "deep[classements][_sort]": "position",
         }
-        data = await self._request(endpoint, params=params)
+        headers_seen: dict[str, str] = {}
+        data = await self._request(
+            endpoint,
+            params=params,
+            extra_headers=extra_headers,
+            response_headers=headers_seen,
+        )
         if not isinstance(data, dict):
             raise FFBBNotFoundError(f"Pool {poule_id} not found")
+        self._last_poule_headers["recheck" if refresh > 0 else "normal"] = headers_seen
 
         rencontres = data.get("rencontres")
         if isinstance(rencontres, list) and len(rencontres) >= self._RENCONTRES_LIMIT:
@@ -313,16 +421,13 @@ class FFBBClient:
             self._warned_rencontres_limit.discard(poule_id)
 
         classements = data.get("classements")
-        if (
-            isinstance(classements, list)
-            and len(classements) >= self._CLASSEMENTS_LIMIT
-        ):
+        if isinstance(classements, list) and len(classements) >= classements_limit:
             if poule_id not in self._warned_classements_limit:
                 _LOGGER.warning(
                     "Standings for pool %s hit the API limit (%d); some teams "
                     "may be missing from this response",
                     poule_id,
-                    self._CLASSEMENTS_LIMIT,
+                    classements_limit,
                 )
                 self._warned_classements_limit.add(poule_id)
         else:

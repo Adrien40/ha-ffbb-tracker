@@ -1,5 +1,27 @@
 # FFBB Tracker - Changelog
 
+## 0.8.8
+
+🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀
+
+This release adds a safety net against outdated responses from the FFBB API, and a diagnostics report to find out why a score is late.
+
+### ✨ New features
+- **API diagnostics.** The diagnostics download (device menu ⋮ › *Download diagnostics*) now has an `api` section: when the FFBB API was last queried, the cache-related headers of its answers (`Age`, `Cache-Control`, `Date`, `ETag`, …), the matches of your team that started more than 3 hours ago and still have no result (match number, age, and the raw `joue` / score fields), and what the safety net below did. It contains no team name, address or other personal data.
+
+### 🛡️ Hardening
+- **Safety net against outdated API responses.** The FFBB API was observed, on one pool, answering the integration's usual request with a copy of the data that predated the published scores (and a schedule change) for several days, while answering correctly for a slightly different request. If a match of your team started between 3 hours and 7 days ago and still has no result, the integration now sends one extra request, formulated differently (same fields in another order, `Cache-Control: no-cache`), and uses its answer if it contains more results. It runs at most once an hour, only in that situation, and never fails the update if it errors. Normal requests are unchanged.
+- This is a precaution: the cause of the outdated responses could not be identified, and it was no longer reproducible by the time this was written, so the safety net has not been seen working on a real outdated answer. The diagnostics will show whether it ever fires.
+
+### 🧰 Maintenance
+- Test suite grown from 350 to 401 tests, 99 % coverage. The normal pool request is pinned by a test (exact fields, parameters and headers), since the safety net relies on its extra request being different.
+- The "has a result" rule is now a single function shared by the parser and the safety net (behaviour unchanged).
+
+### 📚 Documentation
+- README: new troubleshooting entry for a score that is late, explaining how to download the diagnostics.
+
+🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀
+
 ## 0.8.7
 
 🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀

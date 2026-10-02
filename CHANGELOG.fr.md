@@ -1,5 +1,27 @@
 # FFBB Tracker - Journal des modifications
 
+## 0.8.8
+
+🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀
+
+Cette version ajoute une sécurité contre les réponses périmées de l'API FFBB, et un rapport de diagnostic pour comprendre pourquoi un score tarde.
+
+### ✨ Nouveautés
+- **Diagnostics de l'API.** Le téléchargement des diagnostics (menu ⋮ de l'appareil › *Télécharger les diagnostics*) contient maintenant une section `api` : quand l'API FFBB a été interrogée pour la dernière fois, les en-têtes de cache de ses réponses (`Age`, `Cache-Control`, `Date`, `ETag`, …), les matchs de votre équipe commencés il y a plus de 3 heures qui n'ont toujours pas de résultat (numéro du match, ancienneté, et les champs bruts `joue` / score), et ce que la sécurité ci-dessous a fait. Elle ne contient ni nom d'équipe, ni adresse, ni autre donnée personnelle.
+
+### 🛡️ Renforcement
+- **Sécurité contre les réponses périmées de l'API.** L'API FFBB a été observée, sur une poule, en train de répondre à la requête habituelle de l'intégration avec une copie des données antérieure à la publication des scores (et à un changement d'horaire) pendant plusieurs jours, alors qu'elle répondait correctement à une requête légèrement différente. Si un match de votre équipe a commencé il y a entre 3 heures et 7 jours et n'a toujours pas de résultat, l'intégration envoie maintenant une requête supplémentaire, formulée autrement (mêmes champs dans un autre ordre, `Cache-Control: no-cache`), et utilise sa réponse si elle contient plus de résultats. Elle s'exécute au plus une fois par heure, uniquement dans ce cas, et ne fait jamais échouer la mise à jour en cas d'erreur. Les requêtes normales sont inchangées.
+- C'est une précaution : la cause des réponses périmées n'a pas pu être identifiée et n'était plus reproductible au moment de l'écriture, donc cette sécurité n'a pas été vue à l'œuvre sur une vraie réponse périmée. Les diagnostics montreront si elle se déclenche un jour.
+
+### 🧰 Maintenance
+- Suite de tests passée de 350 à 401 tests, 99 % de couverture. La requête normale de la poule est épinglée par un test (champs, paramètres et en-têtes exacts), puisque la sécurité repose sur le fait que sa requête supplémentaire soit différente.
+- La règle « a un résultat » est maintenant une seule fonction, partagée par l'analyse des matchs et la sécurité (comportement inchangé).
+
+### 📚 Documentation
+- README : nouvelle entrée de dépannage pour un score en retard, qui explique comment télécharger les diagnostics.
+
+🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀
+
 ## 0.8.7
 
 🏀🏀🏀🏀🏀🏀🏀🏀🏀🏀

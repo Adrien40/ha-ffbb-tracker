@@ -168,7 +168,11 @@ rules:
     comment: Each tracked team is registered as a device via DeviceInfo.
   diagnostics:
     status: done
-    comment: diagnostics.py redacts raw payloads/addresses, exposing only a compact summary.
+    comment: >
+      diagnostics.py redacts raw payloads/addresses, exposing only a compact summary,
+      plus an `api` section (last API fetch, cache-related response headers, past
+      matches still without a result, outdated-response safety net state) that
+      holds no personal data.
   discovery-update-info:
     status: exempt
     comment: Cloud service integration; no local network discovery involved.

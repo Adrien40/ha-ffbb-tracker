@@ -10,7 +10,8 @@ that kind of change fails loudly in CI instead of shipping quietly.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import json
+from datetime import UTC, datetime, timedelta
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -178,3 +179,110 @@ async def test_diagnostics_include_team_standing_when_present(hass):
 
     assert diagnostics["data"]["team_standing"]["position"] == 1
     assert diagnostics["data"]["team_standing"]["points"] == 6
+
+
+# --- api section: what the FFBB API last answered ---------------------------
+
+
+async def test_diagnostics_api_section_is_empty_before_the_first_fetch(hass):
+    entry = _make_entry_with_coordinator(hass)
+
+    diagnostics = await async_get_config_entry_diagnostics(hass, entry)
+
+    assert diagnostics["api"] == {
+        "last_fetch_at": None,
+        "response_headers": {},
+        "pending_results": [],
+        "stale_recheck": {
+            "attempts": 0,
+            "outdated_responses_detected": 0,
+            "last_attempt_at": None,
+            "last_outcome": None,
+        },
+    }
+
+
+async def test_diagnostics_api_section_reports_the_safety_net_state(hass):
+    entry = _make_entry_with_coordinator(hass)
+    coordinator = entry.runtime_data
+    coordinator.last_api_fetch_at = datetime(2026, 10, 2, 10, 0, tzinfo=UTC)
+    coordinator.last_recheck_at = datetime(2026, 10, 2, 10, 0, 1, tzinfo=UTC)
+    coordinator.stale_recheck_attempts = 3
+    coordinator.stale_responses_detected = 1
+    coordinator.last_recheck_outcome = "fresher_response_used (+1 result(s))"
+    coordinator.pending_results = [
+        {
+            "match_number": "11527",
+            "round": "2",
+            "date": "2026-09-26T16:00:00",
+            "age_hours": 138.0,
+            "joue": False,
+            "resultatEquipe1": None,
+            "resultatEquipe2": None,
+        }
+    ]
+    coordinator.client = type(
+        "Client",
+        (),
+        {
+            "last_poule_headers": {
+                "normal": {"age": "3600", "cache-control": "max-age=60"}
+            }
+        },
+    )()
+
+    api = (await async_get_config_entry_diagnostics(hass, entry))["api"]
+
+    assert api["last_fetch_at"] == "2026-10-02T10:00:00+00:00"
+    assert api["response_headers"] == {
+        "normal": {"age": "3600", "cache-control": "max-age=60"}
+    }
+    assert api["pending_results"][0]["match_number"] == "11527"
+    assert api["stale_recheck"] == {
+        "attempts": 3,
+        "outdated_responses_detected": 1,
+        "last_attempt_at": "2026-10-02T10:00:01+00:00",
+        "last_outcome": "fresher_response_used (+1 result(s))",
+    }
+
+
+async def test_diagnostics_api_section_holds_no_identifying_data(hass):
+    """It is pasted into public issues: only timestamps, cache headers, match
+    numbers and the raw result fields are allowed -- no names or addresses."""
+    entry = _make_entry_with_coordinator(hass)
+    coordinator = entry.runtime_data
+    coordinator.pending_results = [
+        coordinator._summarize_pending(
+            {
+                "numero": "11527",
+                "numeroJournee": "2",
+                "date_rencontre": "2026-09-26T16:00:00",
+                "joue": False,
+                "nomEquipe1": "SECRET HOME TEAM",
+                "nomEquipe2": "SECRET AWAY TEAM",
+                "salle": {"libelle": "SECRET GYM", "adresse": "1 secret street"},
+            },
+            age=timedelta(hours=5),
+        )
+    ]
+
+    diagnostics = await async_get_config_entry_diagnostics(hass, entry)
+
+    dumped = json.dumps(diagnostics)
+    assert "SECRET" not in dumped
+    assert set(diagnostics["api"]["pending_results"][0]) == {
+        "match_number",
+        "round",
+        "date",
+        "age_hours",
+        "joue",
+        "resultatEquipe1",
+        "resultatEquipe2",
+    }
+
+
+async def test_diagnostics_stay_json_serializable(hass):
+    entry = _make_entry_with_coordinator(hass)
+    entry.runtime_data.last_api_fetch_at = datetime(2026, 10, 2, tzinfo=UTC)
+
+    json.dumps(await async_get_config_entry_diagnostics(hass, entry))

@@ -363,6 +363,7 @@ No credentials, tokens, or external accounts are created by this integration, so
 
 * **No teams found when searching for a club**: Some sports associations have not yet registered their rosters for the next phase, or the pool schedule has not been officially released by the committee or league.
 * **The GPS link directs to the town center instead of the gym**: In smaller facilities, the municipality may not have provided a precise street address to the federation. In this case, the link combines the gym name and town name to optimize routing.
+* **A score is late or missing**: results appear once the club has entered them on the FFBB site. If the score is on competitions.ffbb.com but still not in Home Assistant after a few hours, press **Refresh**, then download the diagnostics (device menu ⋮ › *Download diagnostics*) and attach the file to an [issue](https://github.com/Adrien40/ha-ffbb-tracker/issues): its `api` section shows when the FFBB API was last queried and what it answered. The integration also re-checks on its own, with a differently formulated request, when a match of your team still has no result 3 hours after it started.
 * **The rank evolution sensor shows 0 after a restart**: This is expected during initial setup; as soon as the next standings update occurs, the actual shift (+1, -1, etc.) will be computed and preserved.
 
 </details>

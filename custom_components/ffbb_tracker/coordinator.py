@@ -34,6 +34,9 @@ from .const import (
     LOGO_ASSET_HEIGHT,
     NEXT_MATCH_GRACE_HOURS,
     SEASON_ROLLOVER_THRESHOLD_DAYS,
+    STALE_RECHECK_MIN_INTERVAL_MINUTES,
+    STALE_RESULT_MAX_AGE_DAYS,
+    STALE_RESULT_MIN_AGE_HOURS,
     TOKEN_REFRESH_FAILURE_THRESHOLD,
 )
 
@@ -57,6 +60,37 @@ def _safe_int(value: Any) -> int | None:
     # back to `except (ValueError, TypeError):`.
     except ValueError, TypeError:
         return None
+
+
+def _engagement_id(raw: Any) -> str:
+    """Return the engagement id of a raw `idEngagementEquipeN` value."""
+    if isinstance(raw, dict):
+        return str(raw.get("id", ""))
+    return str(raw or "")
+
+
+def _is_played(match: dict[str, Any]) -> bool:
+    """Return True if a raw rencontre has a published result.
+
+    The API is expected to set "joue" for completed matches, including 0-0
+    walkovers/forfeits. As a safety net for payloads where that flag is
+    missing but a non-zero final score is already present, a match with a
+    score also counts as played.
+    """
+    if bool(match.get("joue", False)):
+        return True
+    score1 = _safe_int(match.get("resultatEquipe1"))
+    score2 = _safe_int(match.get("resultatEquipe2"))
+    return score1 is not None and score2 is not None and (score1 > 0 or score2 > 0)
+
+
+def _count_results(data: dict[str, Any]) -> int:
+    """Return how many rencontres of a poule payload have a published result."""
+    return sum(
+        1
+        for match in data.get("rencontres") or []
+        if isinstance(match, dict) and _is_played(match)
+    )
 
 
 def _build_logo_url(base_url: str | None, logo_id: Any) -> str | None:
@@ -228,6 +262,15 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
         # transient blip.
         self._not_found_since: datetime | None = None
 
+        # State of the outdated-response safety net, exposed in the
+        # diagnostics (see _async_recheck_missing_results).
+        self.last_api_fetch_at: datetime | None = None
+        self.pending_results: list[dict[str, Any]] = []
+        self.stale_recheck_attempts = 0
+        self.stale_responses_detected = 0
+        self.last_recheck_at: datetime | None = None
+        self.last_recheck_outcome: str | None = None
+
         super().__init__(
             hass,
             _LOGGER,
@@ -351,7 +394,9 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
                 or (now - cache.fetched_at) > _POULE_CACHE_TTL
             )
             if is_stale:
-                cache.data = await self.client.get_poule_data(self.poule_id)
+                data = await self.client.get_poule_data(self.poule_id)
+                self.last_api_fetch_at = now
+                cache.data = await self._async_recheck_missing_results(data)
                 cache.fetched_at = now
 
             if cache.data is None:
@@ -366,7 +411,111 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
                     f"No poule data available for poule {self.poule_id} "
                     "after fetch attempt"
                 )
+            self.pending_results = [
+                self._summarize_pending(match, age)
+                for match, age in self._find_pending_results(cache.data)
+            ]
             return cache.data
+
+    def _find_pending_results(
+        self, data: dict[str, Any]
+    ) -> list[tuple[dict[str, Any], timedelta]]:
+        """Return the tracked team's matches that should have a result by now.
+
+        A match counts when it has no published result and started between
+        STALE_RESULT_MIN_AGE_HOURS and STALE_RESULT_MAX_AGE_DAYS ago. Younger
+        matches are simply still waiting for the club to enter the score;
+        older ones are most likely cancelled or forfeited, and would trigger
+        the safety net needlessly for weeks.
+        """
+        now = dt_util.utcnow()
+        min_age = timedelta(hours=STALE_RESULT_MIN_AGE_HOURS)
+        max_age = timedelta(days=STALE_RESULT_MAX_AGE_DAYS)
+        pending: list[tuple[dict[str, Any], timedelta]] = []
+        for match in data.get("rencontres") or []:
+            if not isinstance(match, dict) or _is_played(match):
+                continue
+            if self.engagement_id not in (
+                _engagement_id(match.get("idEngagementEquipe1")),
+                _engagement_id(match.get("idEngagementEquipe2")),
+            ):
+                continue
+            raw_date = match.get("date_rencontre")
+            parsed = dt_util.parse_datetime(raw_date) if raw_date else None
+            if parsed is None:
+                continue
+            age = now - dt_util.as_utc(parsed)
+            if min_age <= age <= max_age:
+                pending.append((match, age))
+        return pending
+
+    @staticmethod
+    def _summarize_pending(match: dict[str, Any], age: timedelta) -> dict[str, Any]:
+        """Describe a match still lacking a result, for the diagnostics."""
+        return {
+            "match_number": str(match.get("numero", "")),
+            "round": str(match.get("numeroJournee", "")),
+            "date": match.get("date_rencontre"),
+            "age_hours": round(age.total_seconds() / 3600, 1),
+            "joue": match.get("joue"),
+            "resultatEquipe1": match.get("resultatEquipe1"),
+            "resultatEquipe2": match.get("resultatEquipe2"),
+        }
+
+    async def _async_recheck_missing_results(
+        self, data: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Check, with a differently formulated request, that results are not missing.
+
+        Safety net against an outdated answer: the FFBB API once kept serving,
+        for one request shape, a poule snapshot that predated the published
+        scores (and a schedule change) while answering correctly for another.
+        If a match of the tracked team should have a result by now (see
+        _find_pending_results), ask again with FFBBClient.get_poule_data's
+        `refresh` variant and keep that answer if it holds more results.
+
+        Runs at most once per STALE_RECHECK_MIN_INTERVAL_MINUTES, and never
+        raises: on any API error the original answer is kept.
+        """
+        if not self._find_pending_results(data):
+            return data
+
+        now = dt_util.utcnow()
+        if self.last_recheck_at is not None and now - self.last_recheck_at < timedelta(
+            minutes=STALE_RECHECK_MIN_INTERVAL_MINUTES
+        ):
+            return data
+
+        self.last_recheck_at = now
+        self.stale_recheck_attempts += 1
+        try:
+            fresher = await self.client.get_poule_data(
+                self.poule_id, refresh=int(now.timestamp() // 3600)
+            )
+        except FFBBApiError as err:
+            self.last_recheck_outcome = "failed"
+            _LOGGER.debug(
+                "Recheck of pool %s after a missing result failed: %s",
+                self.poule_id,
+                err,
+            )
+            return data
+
+        gained = _count_results(fresher) - _count_results(data)
+        if gained > 0:
+            self.stale_responses_detected += 1
+            self.last_recheck_outcome = f"fresher_response_used (+{gained} result(s))"
+            _LOGGER.info(
+                "The FFBB API returned an outdated response for pool %s (%d "
+                "result(s) missing); a differently formulated request returned "
+                "the up-to-date data and is used instead",
+                self.poule_id,
+                gained,
+            )
+            return fresher
+
+        self.last_recheck_outcome = "no_difference"
+        return data
 
     def _is_match_live(self, data: FFBBTeamData) -> bool:
         """Return True while the next match is starting soon or awaiting its result.
@@ -654,21 +803,9 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             if parsed_dt:
                 match_date = dt_util.as_utc(parsed_dt)
 
-        is_played = bool(match.get("joue", False))
         score1 = _safe_int(match.get("resultatEquipe1"))
         score2 = _safe_int(match.get("resultatEquipe2"))
-
-        # The API is expected to set "joue" for completed matches, including
-        # 0-0 walkovers/forfeits. As a safety net for payloads where that
-        # flag is missing but a non-zero final score is already present,
-        # treat the match as played too.
-        if (
-            not is_played
-            and score1 is not None
-            and score2 is not None
-            and (score1 > 0 or score2 > 0)
-        ):
-            is_played = True
+        is_played = _is_played(match)
 
         eq1_engagement = match.get("idEngagementEquipe1")
         eq2_engagement = match.get("idEngagementEquipe2")

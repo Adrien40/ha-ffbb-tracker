@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
+from multidict import CIMultiDict
 
 from custom_components.ffbb_tracker.api import (
     FFBBApiError,
@@ -25,10 +26,17 @@ from custom_components.ffbb_tracker.api import (
 from custom_components.ffbb_tracker.const import DEFAULT_DIRECTUS_TOKEN
 
 
-def _mock_response(status: int, json_data: dict | None = None, text: str = ""):
+def _mock_response(
+    status: int,
+    json_data: dict | None = None,
+    text: str = "",
+    headers: dict | None = None,
+):
     """Build a mock aiohttp response usable as an async context manager."""
     response = MagicMock()
     response.status = status
+    if headers is not None:
+        response.headers = CIMultiDict(headers)
     response.json = AsyncMock(return_value=json_data or {})
     response.text = AsyncMock(return_value=text)
 
@@ -471,3 +479,222 @@ async def test_get_poule_data_requests_gym_postal_code_through_commune():
     fields = kwargs["params"]["fields"].split(",")
     assert "rencontres.salle.commune.codePostal" in fields
     assert "rencontres.salle.codePostal" not in fields
+
+
+# --- poule request: the normal request is pinned, the refresh variant differs --
+
+# The exact fields of the normal request, in order. A normal poll must keep
+# sending precisely this: its answers are the ones known to be up to date, and
+# the outdated-response safety net relies on a *different* shape to bypass a
+# stored copy. Change this list only on purpose.
+NORMAL_POULE_FIELDS = (
+    "id",
+    "nom",
+    "rencontres.id",
+    "rencontres.numero",
+    "rencontres.numeroJournee",
+    "rencontres.resultatEquipe1",
+    "rencontres.resultatEquipe2",
+    "rencontres.joue",
+    "rencontres.nomEquipe1",
+    "rencontres.nomEquipe2",
+    "rencontres.date_rencontre",
+    "rencontres.idEngagementEquipe1.id",
+    "rencontres.idEngagementEquipe2.id",
+    "rencontres.idOrganismeEquipe1.id",
+    "rencontres.idOrganismeEquipe1.nom",
+    "rencontres.idOrganismeEquipe1.code",
+    "rencontres.idOrganismeEquipe1.logo",
+    "rencontres.idOrganismeEquipe2.id",
+    "rencontres.idOrganismeEquipe2.nom",
+    "rencontres.idOrganismeEquipe2.code",
+    "rencontres.idOrganismeEquipe2.logo",
+    "rencontres.salle.id",
+    "rencontres.salle.libelle",
+    "rencontres.salle.adresse",
+    "rencontres.salle.commune.libelle",
+    "rencontres.salle.commune.codePostal",
+    "classements.id",
+    "classements.idEngagement.id",
+    "classements.idEngagement.nom",
+    "classements.idEngagement.idOrganisme.code",
+    "classements.matchJoues",
+    "classements.points",
+    "classements.position",
+    "classements.gagnes",
+    "classements.perdus",
+    "classements.nuls",
+    "classements.nombreForfaits",
+    "classements.nombreDefauts",
+    "classements.penalitesArbitrage",
+    "classements.penalitesEntraineur",
+    "classements.penalites",
+    "classements.quotient",
+    "classements.paniersMarques",
+    "classements.paniersEncaisses",
+    "classements.difference",
+)
+
+
+async def _poule_request(refresh: int | None = None, **response):
+    """Run get_poule_data against a mocked session; return (client, call kwargs)."""
+    session = MagicMock()
+    payload = {"data": response.pop("data", {"id": "poule-1", "nom": "Poule A"})}
+    session.get = MagicMock(return_value=_mock_response(200, payload, **response))
+    client = FFBBClient(session)
+    if refresh is None:
+        await client.get_poule_data("poule-1")
+    else:
+        await client.get_poule_data("poule-1", refresh=refresh)
+    return client, session.get.call_args.kwargs
+
+
+@pytest.mark.asyncio
+async def test_normal_poule_request_is_unchanged():
+    _, kwargs = await _poule_request()
+
+    params = kwargs["params"]
+    assert params["fields"] == ",".join(NORMAL_POULE_FIELDS)
+    assert params["deep[rencontres][_limit]"] == 1000
+    assert params["deep[rencontres][_sort]"] == "date_rencontre"
+    assert params["deep[classements][_limit]"] == 100
+    assert params["deep[classements][_sort]"] == "position"
+    assert "Cache-Control" not in kwargs["headers"]
+    assert "Pragma" not in kwargs["headers"]
+
+
+@pytest.mark.parametrize("refresh", [0, -3])
+@pytest.mark.asyncio
+async def test_non_positive_refresh_means_the_normal_request(refresh):
+    _, kwargs = await _poule_request(refresh=refresh)
+
+    assert kwargs["params"]["fields"] == ",".join(NORMAL_POULE_FIELDS)
+    assert "Cache-Control" not in kwargs["headers"]
+
+
+@pytest.mark.asyncio
+async def test_refresh_request_asks_for_the_same_data_differently():
+    _, kwargs = await _poule_request(refresh=490_000)
+
+    refreshed = kwargs["params"]["fields"].split(",")
+    assert sorted(refreshed) == sorted(NORMAL_POULE_FIELDS)
+    assert refreshed != list(NORMAL_POULE_FIELDS)
+    assert kwargs["headers"]["Cache-Control"] == "no-cache"
+    assert kwargs["headers"]["Pragma"] == "no-cache"
+    # Everything else about the request is unchanged.
+    assert kwargs["params"]["deep[rencontres][_limit]"] == 1000
+    assert kwargs["params"]["deep[rencontres][_sort]"] == "date_rencontre"
+
+
+@pytest.mark.asyncio
+async def test_successive_refresh_values_give_different_requests():
+    """Reusing one shape would just hit the stored copy of the previous
+    refresh, so the shape must change with the value passed in (the hour)."""
+    shapes = set()
+    for refresh in range(1, 500):
+        _, kwargs = await _poule_request(refresh=refresh)
+        shapes.add(
+            (kwargs["params"]["fields"], kwargs["params"]["deep[classements][_limit]"])
+        )
+
+    assert len(shapes) == 499
+
+
+@pytest.mark.asyncio
+async def test_refresh_never_makes_the_standings_limit_unsafe():
+    """A pool has far fewer than 50 teams, so the varied limit can't truncate."""
+    for refresh in range(1, 3000, 7):
+        _, kwargs = await _poule_request(refresh=refresh)
+
+        assert 51 <= kwargs["params"]["deep[classements][_limit]"] <= 100
+
+
+@pytest.mark.asyncio
+async def test_refresh_truncation_warning_uses_the_limit_actually_requested(caplog):
+    # refresh=1760 -> standings limit 60 (100 - 1760 // 44 % 50)
+    data = {"id": "poule-1", "classements": [{"id": str(i)} for i in range(60)]}
+
+    with caplog.at_level(logging.WARNING):
+        _, kwargs = await _poule_request(refresh=1760, data=data)
+
+    assert kwargs["params"]["deep[classements][_limit]"] == 60
+    assert "hit the API limit (60)" in caplog.text
+
+
+# --- poule request: cache-related response headers for the diagnostics --------
+
+
+@pytest.mark.asyncio
+async def test_cache_related_response_headers_are_captured():
+    client, _ = await _poule_request(
+        headers={
+            "Age": "3600",
+            "Cache-Control": "public, max-age=300",
+            "Date": "Fri, 02 Oct 2026 10:00:00 GMT",
+            "CF-Cache-Status": "HIT",
+            "Set-Cookie": "session=secret",
+            "Content-Type": "application/json",
+        }
+    )
+
+    assert client.last_poule_headers == {
+        "normal": {
+            "age": "3600",
+            "cache-control": "public, max-age=300",
+            "date": "Fri, 02 Oct 2026 10:00:00 GMT",
+            "cf-cache-status": "HIT",
+        }
+    }
+
+
+@pytest.mark.asyncio
+async def test_refresh_headers_are_recorded_separately():
+    client, _ = await _poule_request(refresh=5, headers={"Age": "0"})
+
+    assert client.last_poule_headers == {"recheck": {"age": "0"}}
+
+
+@pytest.mark.asyncio
+async def test_responses_without_usable_headers_record_an_empty_entry():
+    """The default mock has non-string header values: they must be ignored."""
+    client, _ = await _poule_request()
+
+    assert client.last_poule_headers == {"normal": {}}
+
+
+@pytest.mark.asyncio
+async def test_last_poule_headers_returns_a_copy():
+    client, _ = await _poule_request(headers={"Age": "1"})
+
+    client.last_poule_headers["normal"]["age"] = "tampered"
+
+    assert client.last_poule_headers["normal"]["age"] == "1"
+
+
+@pytest.mark.asyncio
+async def test_extra_headers_survive_the_401_retry():
+    """The retry after a token refresh must still ask for a fresh answer, and
+    the token refresh request itself must not carry the extra headers."""
+    session = MagicMock()
+    session.get = MagicMock(
+        side_effect=[
+            _mock_response(401),
+            _mock_response(200, {"data": {"key_directus_website": "new-token"}}),
+            _mock_response(200, {"data": {"id": "ok"}}, headers={"Age": "0"}),
+        ]
+    )
+    client = FFBBClient(session)
+    seen: dict[str, str] = {}
+
+    result = await client._request(
+        "items/foo",
+        extra_headers={"Cache-Control": "no-cache"},
+        response_headers=seen,
+    )
+
+    calls = session.get.call_args_list
+    assert result == {"id": "ok"}
+    assert calls[0].kwargs["headers"]["Cache-Control"] == "no-cache"
+    assert "Cache-Control" not in calls[1].kwargs["headers"]
+    assert calls[2].kwargs["headers"]["Cache-Control"] == "no-cache"
+    assert seen == {"age": "0"}

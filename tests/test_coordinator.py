@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, call
 
 import pytest
 from homeassistant.helpers import issue_registry as ir
@@ -42,7 +42,10 @@ from custom_components.ffbb_tracker.const import (
 from custom_components.ffbb_tracker.coordinator import (
     _POULE_CACHE_TTL,
     FFBBDataUpdateCoordinator,
+    _count_results,
+    _engagement_id,
     _get_poule_cache,
+    _is_played,
 )
 
 
@@ -1345,3 +1348,280 @@ def test_short_live_window_does_not_shrink_next_match_grace(hass):
     assert data.next_match.is_stale is False
     # ...but it is outside the 1 h live window, so polling stays slow.
     assert coordinator._is_match_live(data) is False
+
+
+# --- results that should exist by now: detection ----------------------------
+
+
+def _poule(*rencontres: dict) -> dict:
+    return {
+        "id": "poule-1",
+        "nom": "Poule A",
+        "rencontres": list(rencontres),
+        "classements": [],
+    }
+
+
+def _played_rencontre(match_id: str, started: datetime, s1: int = 68, s2: int = 54):
+    rencontre = _unplayed_rencontre(match_id, started)
+    rencontre.update(joue=True, resultatEquipe1=s1, resultatEquipe2=s2)
+    return rencontre
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ({"joue": True}, True),
+        ({"joue": True, "resultatEquipe1": None, "resultatEquipe2": None}, True),
+        ({"joue": False, "resultatEquipe1": "68", "resultatEquipe2": "54"}, True),
+        ({"joue": None, "resultatEquipe1": 3, "resultatEquipe2": 0}, True),
+        ({"joue": False, "resultatEquipe1": 0, "resultatEquipe2": 0}, False),
+        ({"joue": False, "resultatEquipe1": None, "resultatEquipe2": None}, False),
+        ({"joue": False, "resultatEquipe1": 68, "resultatEquipe2": None}, False),
+        ({}, False),
+    ],
+)
+def test_is_played_follows_the_flag_then_the_scores(raw, expected):
+    assert _is_played(raw) is expected
+
+
+def test_count_results_counts_only_matches_with_a_result():
+    now = dt_util.utcnow()
+    data = _poule(
+        _played_rencontre("a", now),
+        _unplayed_rencontre("b", now),
+        _played_rencontre("c", now),
+    )
+
+    assert _count_results(data) == 2
+    assert _count_results({}) == 0
+    assert _count_results({"rencontres": None}) == 0
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [({"id": 7}, "7"), ({}, ""), ("8", "8"), (9, "9"), (None, "")],
+)
+def test_engagement_id_accepts_a_nested_object_or_a_plain_id(raw, expected):
+    assert _engagement_id(raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("hours_ago", "pending"),
+    [(2, False), (3.5, True), (24 * 6, True), (24 * 8, False)],
+)
+def test_a_match_is_pending_only_between_3_hours_and_7_days(hass, hours_ago, pending):
+    coordinator = _make_coordinator(hass)
+    started = dt_util.utcnow() - timedelta(hours=hours_ago)
+
+    found = coordinator._find_pending_results(_poule(_unplayed_rencontre("m", started)))
+
+    assert bool(found) is pending
+
+
+def test_matches_with_a_result_are_never_pending(hass):
+    coordinator = _make_coordinator(hass)
+    started = dt_util.utcnow() - timedelta(hours=5)
+    score_only = _unplayed_rencontre("m2", started)
+    score_only.update(resultatEquipe1=60, resultatEquipe2=50)
+
+    found = coordinator._find_pending_results(
+        _poule(_played_rencontre("m1", started), score_only)
+    )
+
+    assert found == []
+
+
+def test_other_teams_matches_are_never_pending(hass):
+    coordinator = _make_coordinator(hass)
+    rencontre = _unplayed_rencontre("m", dt_util.utcnow() - timedelta(hours=5))
+    rencontre["idEngagementEquipe1"] = {"id": "other-1"}
+    rencontre["idEngagementEquipe2"] = {"id": "other-2"}
+
+    assert coordinator._find_pending_results(_poule(rencontre)) == []
+
+
+@pytest.mark.parametrize("raw_date", [None, "", "not a date"])
+def test_a_match_without_a_usable_date_is_never_pending(hass, raw_date):
+    coordinator = _make_coordinator(hass)
+    rencontre = _unplayed_rencontre("m", dt_util.utcnow())
+    rencontre["date_rencontre"] = raw_date
+
+    assert coordinator._find_pending_results(_poule(rencontre)) == []
+
+
+def test_pending_matches_are_found_when_the_team_plays_away_too(hass):
+    coordinator = _make_coordinator(hass)
+    rencontre = _unplayed_rencontre("m", dt_util.utcnow() - timedelta(hours=5))
+    rencontre["idEngagementEquipe1"], rencontre["idEngagementEquipe2"] = (
+        rencontre["idEngagementEquipe2"],
+        rencontre["idEngagementEquipe1"],
+    )
+
+    assert len(coordinator._find_pending_results(_poule(rencontre))) == 1
+
+
+# --- results that should exist by now: the safety net -----------------------
+
+
+class _FakeClient:
+    """Stand-in client answering get_poule_data from a scripted list."""
+
+    base_url = "https://api.example"
+    token_refresh_failures = 0
+
+    def __init__(self, *answers) -> None:
+        self.get_poule_data = AsyncMock(side_effect=list(answers))
+
+
+def _outdated_and_fresh(now: datetime) -> tuple[dict, dict]:
+    """An outdated poule answer (the 4 h old match has no result) and the
+    up-to-date one (it does)."""
+    earlier = now - timedelta(days=7)
+    started = now - timedelta(hours=4)
+    outdated = _poule(
+        _played_rencontre("m1", earlier), _unplayed_rencontre("m2", started)
+    )
+    fresh = _poule(
+        _played_rencontre("m1", earlier), _played_rencontre("m2", started, 27, 51)
+    )
+    return outdated, fresh
+
+
+async def test_recheck_replaces_an_outdated_answer_with_the_fresher_one(hass, freezer):
+    coordinator = _make_coordinator(hass)
+    now = dt_util.utcnow()
+    outdated, fresh = _outdated_and_fresh(now)
+    coordinator.client = _FakeClient(outdated, fresh)
+
+    result = await coordinator._async_fetch_poule_data()
+
+    assert result is fresh
+    # Same request first, then the differently formulated one, salted by the hour.
+    assert coordinator.client.get_poule_data.await_args_list == [
+        call("poule-1"),
+        call("poule-1", refresh=int(now.timestamp() // 3600)),
+    ]
+    assert coordinator.stale_recheck_attempts == 1
+    assert coordinator.stale_responses_detected == 1
+    assert coordinator.last_recheck_outcome == "fresher_response_used (+1 result(s))"
+    assert coordinator.last_recheck_at == now
+    assert coordinator.pending_results == []
+
+
+async def test_recheck_keeps_the_original_answer_when_nothing_changes(hass, freezer):
+    coordinator = _make_coordinator(hass)
+    outdated, _ = _outdated_and_fresh(dt_util.utcnow())
+    coordinator.client = _FakeClient(outdated, outdated)
+
+    result = await coordinator._async_fetch_poule_data()
+
+    assert result is outdated
+    assert coordinator.stale_recheck_attempts == 1
+    assert coordinator.stale_responses_detected == 0
+    assert coordinator.last_recheck_outcome == "no_difference"
+    assert [item["match_number"] for item in coordinator.pending_results] == ["1"]
+
+
+@pytest.mark.parametrize(
+    "error", [FFBBConnectionError("down"), FFBBNotFoundError("gone"), FFBBApiError("x")]
+)
+async def test_recheck_never_fails_the_update_when_the_extra_request_fails(
+    hass, freezer, error
+):
+    coordinator = _make_coordinator(hass)
+    outdated, _ = _outdated_and_fresh(dt_util.utcnow())
+    coordinator.client = _FakeClient(outdated, error)
+
+    result = await coordinator._async_fetch_poule_data()
+
+    assert result is outdated
+    assert coordinator.last_recheck_outcome == "failed"
+    assert coordinator.stale_responses_detected == 0
+
+
+async def test_no_extra_request_when_no_result_is_missing(hass, freezer):
+    coordinator = _make_coordinator(hass)
+    _, fresh = _outdated_and_fresh(dt_util.utcnow())
+    coordinator.client = _FakeClient(fresh)
+
+    result = await coordinator._async_fetch_poule_data()
+
+    assert result is fresh
+    coordinator.client.get_poule_data.assert_awaited_once_with("poule-1")
+    assert coordinator.stale_recheck_attempts == 0
+    assert coordinator.last_recheck_outcome is None
+    assert coordinator.pending_results == []
+
+
+async def test_no_extra_request_for_a_match_that_just_ended(hass, freezer):
+    """Under 3 hours the club may simply not have entered the score yet."""
+    coordinator = _make_coordinator(hass)
+    just_ended = _poule(_unplayed_rencontre("m", dt_util.utcnow() - timedelta(hours=2)))
+    coordinator.client = _FakeClient(just_ended)
+
+    await coordinator._async_fetch_poule_data()
+
+    coordinator.client.get_poule_data.assert_awaited_once_with("poule-1")
+
+
+async def test_recheck_runs_at_most_once_an_hour(hass, freezer):
+    coordinator = _make_coordinator(hass)
+    outdated, fresh = _outdated_and_fresh(dt_util.utcnow())
+    coordinator.client = _FakeClient(outdated, outdated, outdated, outdated, fresh)
+
+    await coordinator._async_fetch_poule_data()  # normal + recheck
+    assert coordinator.stale_recheck_attempts == 1
+
+    freezer.tick(timedelta(minutes=10))
+    await coordinator._async_fetch_poule_data()  # normal only: too soon
+    assert coordinator.stale_recheck_attempts == 1
+    assert coordinator.client.get_poule_data.await_count == 3
+
+    freezer.tick(timedelta(minutes=55))  # 65 min after the first recheck
+    result = await coordinator._async_fetch_poule_data()  # normal + recheck
+    assert coordinator.stale_recheck_attempts == 2
+    assert coordinator.client.get_poule_data.await_count == 5
+    assert result is fresh
+
+
+async def test_the_chosen_answer_is_shared_through_the_poule_cache(hass, freezer):
+    coordinator = _make_coordinator(hass)
+    outdated, fresh = _outdated_and_fresh(dt_util.utcnow())
+    coordinator.client = _FakeClient(outdated, fresh)
+
+    first = await coordinator._async_fetch_poule_data()
+    second = await coordinator._async_fetch_poule_data()
+
+    assert first is second is fresh
+    assert coordinator.client.get_poule_data.await_count == 2
+    assert _get_poule_cache(hass, "poule-1").data is fresh
+
+
+async def test_last_api_fetch_is_recorded_only_when_the_api_was_queried(hass, freezer):
+    coordinator = _make_coordinator(hass)
+    _, fresh = _outdated_and_fresh(dt_util.utcnow())
+    coordinator.client = _FakeClient(fresh)
+    assert coordinator.last_api_fetch_at is None
+
+    await coordinator._async_fetch_poule_data()
+    fetched_at = coordinator.last_api_fetch_at
+    assert fetched_at == dt_util.utcnow()
+
+    freezer.tick(timedelta(seconds=10))  # within the cache lifetime
+    await coordinator._async_fetch_poule_data()
+    assert coordinator.last_api_fetch_at == fetched_at
+
+
+async def test_the_missing_score_shows_up_in_the_team_data(hass, freezer):
+    """End to end: with an outdated answer for the normal request, the match
+    still ends up with its score in the data the entities read."""
+    coordinator = _make_coordinator(hass)
+    outdated, fresh = _outdated_and_fresh(dt_util.utcnow())
+    coordinator.client = _FakeClient(outdated, fresh)
+
+    data = await coordinator._async_update_data()
+
+    assert data.last_match is not None
+    assert data.last_match.match_id == "m2"
+    assert (data.last_match.team_score, data.last_match.opponent_score) == (27, 51)

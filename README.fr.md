@@ -365,6 +365,7 @@ Cette intégration ne crée aucun identifiant, jeton ou compte externe : il n'y 
 
 * **Aucune équipe trouvée lors de la recherche par club** : certaines associations sportives n'ont pas encore engagé leurs équipes pour la phase suivante, ou la poule n'est pas encore publiée par le comité ou la ligue.
 * **Le lien GPS m'amène au centre-ville et non au gymnase** : sur certaines petites salles, la commune n'a pas renseigné d'adresse précise auprès de la FFBB. Le lien utilise alors le nom de la salle et la ville pour optimiser le calcul d'itinéraire.
+* **Un score est en retard ou manquant** : les résultats apparaissent une fois saisis par le club sur le site de la FFBB. Si le score est sur competitions.ffbb.com mais pas dans Home Assistant au bout de quelques heures, appuyez sur **Actualiser**, puis téléchargez les diagnostics (menu ⋮ de l'appareil › *Télécharger les diagnostics*) et joignez le fichier à une [issue](https://github.com/Adrien40/ha-ffbb-tracker/issues) : sa section `api` montre quand l'API FFBB a été interrogée pour la dernière fois et ce qu'elle a répondu. L'intégration revérifie aussi d'elle-même, avec une requête formulée autrement, quand un match de votre équipe n'a toujours pas de résultat 3 heures après son début.
 * **Le capteur d'évolution affiche 0 après un redémarrage** : c'est normal lors de la toute première installation ; dès la prochaine actualisation du classement par la FFBB, le différentiel réel (+1, -1, etc.) sera automatiquement calculé et préservé.
 
 </details>

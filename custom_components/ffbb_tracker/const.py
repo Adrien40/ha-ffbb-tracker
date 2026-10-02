@@ -63,6 +63,16 @@ CONF_SCAN_INTERVAL: Final = "scan_interval"
 # FFBBDataUpdateCoordinator._handle_not_found in coordinator.py.
 SEASON_ROLLOVER_THRESHOLD_DAYS: Final = 3
 
+# Safety net against an outdated poule response from the FFBB API (see
+# FFBBDataUpdateCoordinator._async_recheck_missing_results). When a match of
+# the tracked team started between STALE_RESULT_MIN_AGE_HOURS and
+# STALE_RESULT_MAX_AGE_DAYS ago and still has no result, one extra request,
+# formulated differently, checks whether the answer was an old copy. It runs
+# at most once per STALE_RECHECK_MIN_INTERVAL_MINUTES.
+STALE_RESULT_MIN_AGE_HOURS: Final = 3
+STALE_RESULT_MAX_AGE_DAYS: Final = 7
+STALE_RECHECK_MIN_INTERVAL_MINUTES: Final = 60
+
 # Number of consecutive failed dynamic token refreshes (see
 # FFBBClient.token_refresh_failures) after which the coordinator raises a
 # repair issue warning that the integration may be running on a stale

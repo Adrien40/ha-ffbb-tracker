@@ -9,7 +9,7 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
 from . import FFBBConfigEntry
-from .coordinator import MatchDetails
+from .coordinator import FFBBDataUpdateCoordinator, MatchDetails
 
 # The config entry itself holds no secret (the Directus token lives in
 # const.py / is refreshed at runtime, never stored on the entry), but we
@@ -52,10 +52,34 @@ async def async_get_config_entry_diagnostics(
             else None
         ),
         "last_update_success": coordinator.last_update_success,
+        "api": _api_summary(coordinator),
         "data": data,
     }
 
     return async_redact_data(diagnostics, TO_REDACT)
+
+
+def _api_summary(coordinator: FFBBDataUpdateCoordinator) -> dict[str, Any]:
+    """Describe what the FFBB API last answered, to investigate delayed scores.
+
+    Holds no personal data: only timestamps, cache-related response headers,
+    match numbers and the raw result fields of past matches that still have no
+    result, plus what the outdated-response safety net did (see
+    FFBBDataUpdateCoordinator._async_recheck_missing_results).
+    """
+    fetched_at = coordinator.last_api_fetch_at
+    rechecked_at = coordinator.last_recheck_at
+    return {
+        "last_fetch_at": fetched_at.isoformat() if fetched_at else None,
+        "response_headers": getattr(coordinator.client, "last_poule_headers", {}),
+        "pending_results": coordinator.pending_results,
+        "stale_recheck": {
+            "attempts": coordinator.stale_recheck_attempts,
+            "outdated_responses_detected": coordinator.stale_responses_detected,
+            "last_attempt_at": rechecked_at.isoformat() if rechecked_at else None,
+            "last_outcome": coordinator.last_recheck_outcome,
+        },
+    }
 
 
 def _match_summary(match: MatchDetails | None) -> dict[str, Any] | None:
