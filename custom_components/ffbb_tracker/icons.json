@@ -1,0 +1,82 @@
+{
+  "entity": {
+    "sensor": {
+      "next_match_date": {
+        "default": "mdi:calendar-clock"
+      },
+      "next_match_opponent": {
+        "default": "mdi:account-group"
+      },
+      "next_match_venue_type": {
+        "default": "mdi:home-switch",
+        "state": {
+          "home": "mdi:home",
+          "away": "mdi:car"
+        }
+      },
+      "next_match_location": {
+        "default": "mdi:map-marker-radius"
+      },
+      "last_match_date": {
+        "default": "mdi:calendar-check"
+      },
+      "last_match_opponent": {
+        "default": "mdi:account-group-outline"
+      },
+      "last_match_result": {
+        "default": "mdi:trophy-outline",
+        "state": {
+          "win": "mdi:trophy",
+          "loss": "mdi:close-circle-outline",
+          "draw": "mdi:handshake-outline"
+        }
+      },
+      "last_match_score": {
+        "default": "mdi:scoreboard-outline"
+      },
+      "rank": {
+        "default": "mdi:format-list-numbered"
+      },
+      "rank_evolution": {
+        "default": "mdi:minus",
+        "range": {
+          "-9999": "mdi:arrow-down-bold",
+          "0": "mdi:minus",
+          "1": "mdi:arrow-up-bold"
+        }
+      },
+      "poule": {
+        "default": "mdi:tournament"
+      },
+      "form": {
+        "default": "mdi:history"
+      }
+    },
+    "binary_sensor": {
+      "game_day": {
+        "default": "mdi:basketball"
+      },
+      "match_in_progress": {
+        "default": "mdi:basketball-hoop"
+      }
+    },
+    "button": {
+      "refresh": {
+        "default": "mdi:refresh"
+      }
+    },
+    "calendar": {
+      "schedule": {
+        "default": "mdi:calendar-month"
+      }
+    },
+    "event": {
+      "match_finished": {
+        "default": "mdi:whistle"
+      },
+      "rank_changed": {
+        "default": "mdi:podium"
+      }
+    }
+  }
+}
