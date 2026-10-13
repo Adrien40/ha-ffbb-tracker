@@ -1,0 +1,26 @@
+# Coverage
+coverage.xml
+.coverage
+.coverage.*
+htmlcov/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+
+# Environnements
+.venv/
+venv/
+
+# Caches tests & linters
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
