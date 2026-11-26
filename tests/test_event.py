@@ -17,7 +17,12 @@ never re-fire.
 
 from __future__ import annotations
 
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from homeassistant.core import State
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    MockEntityPlatform,
+    mock_restore_cache_with_extra_data,
+)
 
 from custom_components.ffbb_tracker.const import (
     CONF_COMPETITION_NAME,
@@ -310,6 +315,63 @@ def test_match_finished_handles_no_last_match_yet(hass):
 # ---------------------------------------------------------------------------
 # event.rank_changed
 # ---------------------------------------------------------------------------
+
+
+async def test_match_finished_event_restores_its_last_event_after_a_restart(hass):
+    """Home Assistant restores the last event of an event entity.
+
+    After a restart, "Fin de match" therefore still carries the figures of the
+    last match it fired for (event type, opponent, score, round...), even if a
+    newer result was published while Home Assistant was off: the integration
+    treats that newer result as already known and does not fire again.
+
+    This is why the blueprint reads the permanent "last match" sensors first on
+    a click on "Actualiser": the restored event can be one match behind. (An
+    event that never fired, on a freshly added team, restores nothing and has
+    no attributes at all.)
+    """
+    entity = FFBBMatchFinishedEvent(_make_coordinator(hass))
+    entity.hass = hass
+    entity.platform = MockEntityPlatform(hass, domain="event", platform_name=DOMAIN)
+    entity.entity_id = "event.basket_landes_fin_de_match"
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (
+                State(entity.entity_id, "2026-01-17T21:30:00.000+00:00"),
+                {
+                    "last_event_type": "win",
+                    "last_event_attributes": {
+                        "opponent": "Old Club",
+                        "team_score": 60,
+                        "opponent_score": 50,
+                        "round": "5",
+                    },
+                },
+            )
+        ],
+    )
+
+    await entity.async_internal_added_to_hass()
+
+    attributes = entity.state_attributes
+    assert attributes["event_type"] == "win"
+    assert attributes["opponent"] == "Old Club"
+    assert attributes["team_score"] == 60
+    assert attributes["round"] == "5"
+
+
+async def test_match_finished_event_that_never_fired_restores_nothing(hass):
+    """A new team (or one whose event never fired) has no attributes at all."""
+    entity = FFBBMatchFinishedEvent(_make_coordinator(hass))
+    entity.hass = hass
+    entity.platform = MockEntityPlatform(hass, domain="event", platform_name=DOMAIN)
+    entity.entity_id = "event.basket_landes_fin_de_match"
+
+    await entity.async_internal_added_to_hass()
+
+    assert entity.state_attributes.get("event_type") is None
+    assert "opponent" not in entity.state_attributes
 
 
 def test_rank_changed_does_not_fire_on_cold_start(hass):

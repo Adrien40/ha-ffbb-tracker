@@ -211,11 +211,14 @@ actions:
           {%- endif -%}
         {%- endfor -%}
 
-        {#- The "Fin de match" event only fires for a NEW result. After a click on
-            "Actualiser" it can still hold the previous figures (a score corrected
-            for the same match does not fire it again), so on that click the
-            "last match" sensors are read first. On a real notification the event,
-            just fired, comes first. -#}
+        {#- The "Fin de match" event only fires for a NEW result, and Home
+            Assistant RESTORES its last event after a restart (this was checked:
+            event, attributes and time all come back). So the event can be one
+            match behind: a result published while Home Assistant was off is
+            already known at startup and does not fire it, and a score corrected
+            for the same match does not fire it again. On a click on
+            "Actualiser" the permanent "last match" sensors are therefore read
+            first. On a real notification the event, just fired, comes first. -#}
         {%- set refreshing = trigger is defined and trigger.id is defined and trigger.id == 'callback_refresh' -%}
         {%- set ev = '' if refreshing else event_entity -%}
 
