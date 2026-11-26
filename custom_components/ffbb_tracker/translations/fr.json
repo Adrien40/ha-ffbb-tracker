@@ -1,0 +1,373 @@
+{
+  "title": "FFBB Tracker",
+  "config": {
+    "step": {
+      "user": {
+        "title": "FFBB Tracker",
+        "description": "Entrez un nom de club, une ville, l'URL ou l'identifiant d'une équipe.",
+        "data": {
+          "search_query": "Club, ville, URL ou ID d'équipe"
+        }
+      },
+      "club": {
+        "title": "Sélectionner le club",
+        "description": "Choisissez votre club parmi les résultats.",
+        "data": {
+          "club_id": "Club"
+        }
+      },
+      "team": {
+        "title": "Sélectionner l'équipe",
+        "description": "Choisissez l'équipe à suivre.",
+        "data": {
+          "team_filter": "Filtrer les équipes (facultatif)",
+          "engagement_id": "Équipe"
+        },
+        "data_description": {
+          "team_filter": "Saisissez une partie du nom d'une équipe, d'une catégorie ou d'une compétition (ex. U13) puis validez pour réduire la liste. Validez à nouveau pour confirmer l'équipe choisie."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossible de se connecter à l'API FFBB.",
+      "no_clubs_found": "Aucun club trouvé pour cette recherche.",
+      "too_many_clubs": "Plus de 100 clubs correspondent à cette recherche. Merci de la préciser (ajoutez la ville ou le code du club).",
+      "no_teams_found": "Aucune équipe trouvée pour ce club.",
+      "invalid_engagement": "URL ou identifiant d'équipe invalide.",
+      "no_poule_found": "Aucune poule trouvée pour cette équipe.",
+      "query_too_short": "Merci de saisir au moins 2 caractères.",
+      "unknown": "Erreur inattendue.",
+      "no_team_matches": "Aucune équipe ne correspond à ce filtre. La liste complète est affichée."
+    },
+    "abort": {
+      "already_configured": "Cette équipe est déjà configurée.",
+      "club_not_found": "Club introuvable.",
+      "reconfigure_successful": "Reconfiguration réussie."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options FFBB Tracker",
+        "description": "Réglez la fréquence des mises à jour, et activez éventuellement un rafraîchissement plus rapide autour des heures de match pour avoir le score au plus tôt.",
+        "data": {
+          "scan_interval": "Intervalle normal d'actualisation (minutes)",
+          "live_polling": "Rafraîchissement accéléré les jours de match",
+          "live_scan_interval": "Intervalle d'actualisation en direct (minutes)",
+          "live_window_after_hours": "Délai d'attente du score après match (heures)",
+          "phase_change_days": "Jours sans match avant l'alerte de changement de phase"
+        },
+        "data_description": {
+          "scan_interval": "Fréquence de vérification hors période de match (15 à 1 440 min).",
+          "live_polling": "Bascule automatiquement sur un intervalle plus court autour des matchs.",
+          "live_scan_interval": "Fréquence de vérification en mode rapide (2 à 15 min).",
+          "live_window_after_hours": "Durée du mode rapide après le début du match (1 à 6 h).",
+          "phase_change_days": "Nombre de jours après le dernier match de l'équipe, sans rien de prévu ensuite (ou équipe introuvable), avant que FFBB Tracker propose de la suivre dans sa phase suivante (1 à 30 jours)."
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "game_day": {
+        "name": "Jour de match",
+        "state": {
+          "off": "Non",
+          "on": "Oui"
+        }
+      },
+      "match_in_progress": {
+        "name": "Match en cours",
+        "state": {
+          "off": "Non",
+          "on": "En direct"
+        }
+      },
+      "phase_change_suspected": {
+        "name": "Changement de phase probable",
+        "state": {
+          "off": "Non",
+          "on": "Oui"
+        }
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Actualiser"
+      }
+    },
+    "calendar": {
+      "schedule": {
+        "name": "Calendrier des matchs",
+        "state": {
+          "off": "Aucun match",
+          "on": "En cours"
+        }
+      }
+    },
+    "event": {
+      "match_finished": {
+        "name": "Fin de match",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "win": "Victoire",
+              "loss": "Défaite",
+              "draw": "Match nul"
+            }
+          }
+        }
+      },
+      "rank_changed": {
+        "name": "Changement de classement",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "up": "Progression",
+              "down": "Recul"
+            }
+          }
+        }
+      }
+    },
+    "sensor": {
+      "next_match_date": {
+        "name": "Prochain match : Date"
+      },
+      "next_match_opponent": {
+        "name": "Prochain match : Adversaire"
+      },
+      "next_match_venue_type": {
+        "name": "Prochain match : Terrain",
+        "state": {
+          "home": "Domicile",
+          "away": "Extérieur"
+        }
+      },
+      "next_match_location": {
+        "name": "Prochain match : Lieu"
+      },
+      "last_match_date": {
+        "name": "Dernier match : Date"
+      },
+      "last_match_opponent": {
+        "name": "Dernier match : Adversaire"
+      },
+      "last_match_result": {
+        "name": "Dernier match : Résultat",
+        "state": {
+          "win": "Victoire",
+          "loss": "Défaite",
+          "draw": "Match nul"
+        }
+      },
+      "last_match_score": {
+        "name": "Dernier match : Score"
+      },
+      "rank": {
+        "name": "Classement"
+      },
+      "rank_evolution": {
+        "name": "Classement : Évolution",
+        "state_attributes": {
+          "status": {
+            "name": "Statut",
+            "state": {
+              "waiting_first_ranking": "En attente du premier classement officiel"
+            }
+          }
+        }
+      },
+      "poule": {
+        "name": "Poule"
+      },
+      "form": {
+        "name": "Forme récente"
+      }
+    }
+  },
+  "issues": {
+    "season_rollover": {
+      "title": "FFBB Tracker : « {team_name} » introuvable",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "« {team_name} » : que faire ?",
+            "description": "« {team_name} » est introuvable sur l'API FFBB. Vous pouvez la suivre sous ses nouveaux identifiants, ou ignorer cette alerte.",
+            "menu_options": {
+              "follow": "Retrouver l'équipe",
+              "ignore": "Ignorer cette alerte"
+            }
+          },
+          "confirm": {
+            "title": "Retrouver « {team_name} »",
+            "description": "L'équipe « {team_name} » est introuvable sur l'API FFBB depuis plusieurs jours. Cela arrive généralement en début de nouvelle saison, quand la FFBB réattribue les identifiants d'engagement et de poule. Les étapes suivantes recherchent « {team_name} » à nouveau pour la suivre sous ses nouveaux identifiants. Ses entités existantes sont conservées, avec leurs identifiants, noms et historique, donc vos automatisations et tableaux de bord continuent de fonctionner."
+          },
+          "search": {
+            "title": "Rechercher « {team_name} »",
+            "description": "Entrez un nom de club, une ville, l'URL ou l'identifiant d'une équipe pour retrouver « {team_name} » cette saison.",
+            "data": {
+              "search_query": "Club, ville, URL ou ID d'équipe"
+            }
+          },
+          "club": {
+            "title": "Sélectionner le club",
+            "description": "Choisissez votre club parmi les résultats.",
+            "data": {
+              "club_id": "Club"
+            }
+          },
+          "team": {
+            "title": "Sélectionner l'équipe",
+            "description": "Choisissez l'équipe à suivre à la place de « {team_name} ».",
+            "data": {
+              "team_filter": "Filtrer les équipes (facultatif)",
+              "engagement_id": "Équipe"
+            },
+            "data_description": {
+              "team_filter": "Saisissez une partie du nom d'une équipe, d'une catégorie ou d'une compétition (ex. U13) puis validez pour réduire la liste. Validez à nouveau pour confirmer l'équipe choisie."
+            }
+          }
+        },
+        "error": {
+          "cannot_connect": "Impossible de se connecter à l'API FFBB.",
+          "no_clubs_found": "Aucun club trouvé pour cette recherche.",
+          "too_many_clubs": "Plus de 100 clubs correspondent à cette recherche. Merci de la préciser (ajoutez la ville ou le code du club).",
+          "no_teams_found": "Aucune équipe trouvée pour ce club.",
+          "invalid_engagement": "URL ou identifiant d'équipe invalide.",
+          "no_poule_found": "Aucune poule trouvée pour cette équipe.",
+          "query_too_short": "Merci de saisir au moins 2 caractères.",
+          "already_configured": "Cette équipe est déjà configurée.",
+          "unknown": "Erreur inattendue.",
+          "no_team_matches": "Aucune équipe ne correspond à ce filtre. La liste complète est affichée."
+        },
+        "abort": {
+          "club_not_found": "Club introuvable.",
+          "entry_not_found": "Cette équipe n'est plus configurée.",
+          "ignored": "Alerte ignorée."
+        }
+      }
+    },
+    "token_refresh_failing": {
+      "title": "FFBB Tracker : Échec du renouvellement du jeton public",
+      "description": "Les mises à jour pour « {team_name} » continuent de fonctionner grâce à un jeton de secours, mais le renouvellement automatique du jeton public de l'API FFBB a échoué plusieurs fois de suite. Cela peut signifier que la FFBB a modifié son API `competitions.ffbb.com` et que cette intégration devra être mise à jour. Vérifiez qu'une nouvelle version n'est pas disponible, ou ouvrez une issue sur GitHub si le problème persiste."
+    },
+    "phase_change": {
+      "title": "FFBB Tracker : plus de match pour « {team_name} »",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "« {team_name} » : que faire ?",
+            "description": "« {team_name} » n'a plus de match à jouer. Vous pouvez la suivre dans sa phase suivante, ou ignorer cette alerte (par exemple entre deux saisons).",
+            "menu_options": {
+              "follow": "Suivre l'équipe dans sa phase suivante",
+              "ignore": "Ignorer cette alerte"
+            }
+          },
+          "candidate": {
+            "title": "Nouvelle équipe trouvée pour « {team_name} »",
+            "description": "« {team_name} » n'a plus de match. Le club a une équipe du même nom dans une autre poule : choisissez-la pour la suivre à partir de maintenant. Ses entités existantes sont conservées, avec leurs identifiants, noms et historique. Cochez la case pour chercher une autre équipe à la place.",
+            "data": {
+              "team_filter": "Filtrer les équipes (facultatif)",
+              "engagement_id": "Équipe",
+              "search_other": "Chercher une autre équipe à la place"
+            },
+            "data_description": {
+              "team_filter": "Saisissez une partie du nom d'une équipe, d'une catégorie ou d'une compétition (ex. U13) puis validez pour réduire la liste. Validez à nouveau pour confirmer l'équipe choisie."
+            }
+          },
+          "confirm": {
+            "title": "Retrouver « {team_name} »",
+            "description": "L'équipe « {team_name} » n'a plus de match à jouer. Cela arrive généralement à la fin d'une phase, quand l'équipe continue dans une nouvelle poule. Les étapes suivantes recherchent « {team_name} » à nouveau pour la suivre dans sa nouvelle poule. Ses entités existantes sont conservées, avec leurs identifiants, noms et historique, donc vos automatisations et tableaux de bord continuent de fonctionner."
+          },
+          "search": {
+            "title": "Rechercher « {team_name} »",
+            "description": "Entrez un nom de club, une ville, l'URL ou l'identifiant d'une équipe pour retrouver « {team_name} » cette saison.",
+            "data": {
+              "search_query": "Club, ville, URL ou ID d'équipe"
+            }
+          },
+          "club": {
+            "title": "Sélectionner le club",
+            "description": "Choisissez votre club parmi les résultats.",
+            "data": {
+              "club_id": "Club"
+            }
+          },
+          "team": {
+            "title": "Sélectionner l'équipe",
+            "description": "Choisissez l'équipe à suivre à la place de « {team_name} ».",
+            "data": {
+              "team_filter": "Filtrer les équipes (facultatif)",
+              "engagement_id": "Équipe"
+            },
+            "data_description": {
+              "team_filter": "Saisissez une partie du nom d'une équipe, d'une catégorie ou d'une compétition (ex. U13) puis validez pour réduire la liste. Validez à nouveau pour confirmer l'équipe choisie."
+            }
+          }
+        },
+        "error": {
+          "cannot_connect": "Impossible de se connecter à l'API FFBB.",
+          "no_clubs_found": "Aucun club trouvé pour cette recherche.",
+          "too_many_clubs": "Plus de 100 clubs correspondent à cette recherche. Merci de la préciser (ajoutez la ville ou le code du club).",
+          "no_teams_found": "Aucune équipe trouvée pour ce club.",
+          "invalid_engagement": "URL ou identifiant d'équipe invalide.",
+          "no_poule_found": "Aucune poule trouvée pour cette équipe.",
+          "query_too_short": "Merci de saisir au moins 2 caractères.",
+          "already_configured": "Cette équipe est déjà configurée.",
+          "unknown": "Erreur inattendue.",
+          "no_team_matches": "Aucune équipe ne correspond à ce filtre. La liste complète est affichée."
+        },
+        "abort": {
+          "club_not_found": "Club introuvable.",
+          "entry_not_found": "Cette équipe n'est plus configurée.",
+          "ignored": "Alerte ignorée."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "entry_not_found": {
+      "message": "Aucune équipe ne correspond à l'entrée de configuration « {entry_id} ». Vérifiez l'identifiant, ou omettez-le pour cibler toutes les équipes suivies."
+    },
+    "entry_not_loaded": {
+      "message": "L'équipe de l'entrée de configuration « {entry_id} » n'est pas chargée (configuration en échec, en cours, ou entrée désactivée). Vérifiez l'état de l'intégration, ou omettez l'identifiant pour cibler toutes les équipes chargées."
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Actualiser les données",
+      "description": "Force une mise à jour immédiate du coordinateur pour les équipes FFBB.",
+      "fields": {
+        "entry_id": {
+          "name": "Entrée de configuration",
+          "description": "Entrée de configuration spécifique à actualiser. Si omis, toutes les équipes sont mises à jour."
+        }
+      }
+    },
+    "get_next_matches": {
+      "name": "Obtenir les prochains matchs",
+      "description": "Renvoie les prochains matchs pour vos automatisations ou scripts.",
+      "fields": {
+        "entry_id": {
+          "name": "Entrée de configuration",
+          "description": "Entrée de configuration spécifique à cibler."
+        },
+        "limit": {
+          "name": "Limite",
+          "description": "Nombre de matchs à renvoyer."
+        }
+      }
+    },
+    "get_standings": {
+      "name": "Obtenir le classement de la poule",
+      "description": "Renvoie le tableau complet du classement de la poule.",
+      "fields": {
+        "entry_id": {
+          "name": "Entrée de configuration",
+          "description": "Entrée de configuration spécifique à cibler."
+        }
+      }
+    }
+  }
+}

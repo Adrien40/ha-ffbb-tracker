@@ -1,0 +1,204 @@
+blueprint:
+  name: FFBB Tracker - Changement de classement (Telegram)
+  description: >-
+    Envoie une notification Telegram dès que la position de l'équipe change
+    dans le classement de sa poule, avec l'ancienne et la nouvelle position,
+    et un bouton "Actualiser" interactif. Se base sur l'entité "Changement
+    de classement" (event.*_rank_changed) de FFBB Tracker, qui ne se
+    déclenche qu'au moment réel du changement, jamais au redémarrage de
+    Home Assistant.
+  domain: automation
+  input:
+    rank_changed_event:
+      name: Entité "Changement de classement"
+      description: >-
+        Choisir l'entité event se terminant par "_rank_changed"
+        (traduite "Changement de classement" dans l'interface). Ne pas
+        choisir "Fin de match", qui est une autre entité.
+      selector:
+        entity:
+          filter:
+            integration: ffbb_tracker
+            domain: event
+    refresh_button:
+      name: Bouton d'actualisation FFBB
+      description: >-
+        Le bouton "Actualiser" de la même équipe FFBB Tracker, pressé
+        automatiquement quand on clique sur le bouton Telegram.
+      selector:
+        entity:
+          filter:
+            integration: ffbb_tracker
+            domain: button
+    notify_entity:
+      name: Entité Telegram Notify
+      description: Entité notify du bot Telegram (ex. notify.telegram_basket).
+      selector:
+        entity:
+          filter:
+            integration: telegram_bot
+            domain: notify
+    team_title:
+      name: Nom affiché de l'équipe (optionnel)
+      description: Laisser vide pour utiliser le nom configuré dans l'appareil FFBB.
+      default: ""
+      selector:
+        text: {}
+    direction_filter:
+      name: Notifier pour
+      description: Choisir quels mouvements de classement doivent être notifiés.
+      default: both
+      selector:
+        select:
+          mode: dropdown
+          options:
+            - label: Les progressions et les reculs
+              value: both
+            - label: Les progressions uniquement
+              value: up
+            - label: Les reculs uniquement
+              value: down
+    refresh_command:
+      name: Commande de callback Telegram (optionnel)
+      description: >-
+        Laisser vide : la commande du bouton "Actualiser" est créée
+        automatiquement à partir du nom de l'équipe (ex. /refresh_rank_u13m),
+        donc différente pour chaque équipe suivie. Si vous la renseignez,
+        elle doit commencer par un slash et être unique, y compris par
+        rapport aux autres Blueprints FFBB Tracker.
+      default: ""
+      selector:
+        text: {}
+  source_url: https://github.com/Adrien40/ha-ffbb-tracker/blob/main/blueprints/automation/ffbb_tracker/rank_changed_notification_telegram.yaml
+
+mode: restart
+max_exceeded: silent
+
+# Le déclencheur du bouton "Actualiser" est évalué avant les variables
+# ci-dessous : la commande doit donc être calculée ici aussi, uniquement à
+# partir de valeurs fixes (saisies du Blueprint). Même gabarit que dans
+# `variables`. Sans commande saisie, elle se base sur le nom personnalisé de
+# l'équipe, ou à défaut sur l'identifiant de l'entité (qui contient le nom).
+trigger_variables:
+  refresh_cmd_input: !input refresh_command
+  team_title_input: !input team_title
+  refresh_entity: !input rank_changed_event
+  refresh_cmd: >-
+    {%- set custom = refresh_cmd_input | trim -%}
+    {%- if custom != '' -%}
+      {{ custom }}
+    {%- else -%}
+      {%- set slug = ((team_title_input | trim) or refresh_entity.split('.')[1]) | slugify | truncate(40, true, '', 0) -%}
+      /refresh_rank_{{ slug }}
+    {%- endif -%}
+
+variables:
+  team_title_input: !input team_title
+  event_entity: !input rank_changed_event
+  direction_filter: !input direction_filter
+  refresh_cmd_input: !input refresh_command
+  refresh_entity: !input rank_changed_event
+  refresh_cmd: >-
+    {%- set custom = refresh_cmd_input | trim -%}
+    {%- if custom != '' -%}
+      {{ custom }}
+    {%- else -%}
+      {%- set slug = ((team_title_input | trim) or refresh_entity.split('.')[1]) | slugify | truncate(40, true, '', 0) -%}
+      /refresh_rank_{{ slug }}
+    {%- endif -%}
+  team_title_raw: >-
+    {% if team_title_input | trim != '' %}
+      {{ team_title_input }}
+    {% else %}
+      {% set dev_id = device_id(event_entity) %}
+      {{ device_attr(dev_id, 'name') if dev_id else 'FFBB Tracker' }}
+    {% endif %}
+  # HTML-escaped for parse_mode: html below -- team/competition names come
+  # from the FFBB API and can contain &, <, > (club names, sponsors...),
+  # which would otherwise break or truncate the Telegram message.
+  team_title: >-
+    {{ team_title_raw | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') }}
+
+triggers:
+  - trigger: state
+    entity_id: !input rank_changed_event
+    id: rank_changed
+  - trigger: event
+    event_type: telegram_callback
+    event_data:
+      data: "{{ refresh_cmd }}"
+    id: callback_refresh
+
+conditions: []
+
+actions:
+  - if:
+      - condition: trigger
+        id: callback_refresh
+    then:
+      - action: telegram_bot.answer_callback_query
+        data:
+          callback_query_id: "{{ trigger.event.data.id }}"
+          message: "🔄 Actualisation FFBB en cours..."
+      - action: button.press
+        target:
+          entity_id: !input refresh_button
+      - delay: "00:00:02"
+
+  - condition: template
+    # L'anti-doublon au démarrage est géré côté Python (event.py), via
+    # _known_position seedé à la construction de l'entité -- pas par un
+    # mécanisme de restauration Home Assistant (cette entité n'hérite
+    # volontairement pas de RestoreEntity, pour ne pas rejouer un ancien
+    # changement de classement au redémarrage). Ce contrôle vérifie
+    # seulement la validité de l'état reçu et applique le filtre de
+    # direction choisi par l'utilisateur. Il écarte aussi le retour d'un
+    # "unavailable" (panne de l'API) : l'entité revient alors avec son
+    # ancien horodatage et ses anciens attributs, et on ne notifie que si
+    # l'horodatage de l'événement date de moins de 2 minutes. La première branche gère le
+    # clic sur "Exécuter" dans l'UI, où `trigger` n'est pas défini.
+    value_template: >-
+      {% if trigger is not defined or trigger.id is not defined %}
+        true
+      {% elif trigger.id == 'callback_refresh' %}
+        true
+      {% else %}
+        {% set fired = as_datetime(trigger.to_state.state, default=none) if trigger.to_state is not none else none %}
+        {{ trigger.from_state is not none and
+           trigger.to_state is not none and
+           trigger.to_state.attributes.event_type in ['up', 'down'] and
+           fired is not none and (utcnow() - fired).total_seconds() < 120 and
+           (direction_filter == 'both' or trigger.to_state.attributes.event_type == direction_filter) }}
+      {% endif %}
+
+  - action: telegram_bot.send_message
+    data:
+      entity_id: !input notify_entity
+      parse_mode: html
+      message: |-
+        {#- French ordinal: 1er, then 2e, 3e... (11e and 21e take a plain "e").
+            The podium ranks (1 to 3) get a medal, whatever the direction. -#}
+        {%- macro rank(n) -%}
+          {%- set medals = {1: '🥇 ', 2: '🥈 ', 3: '🥉 '} -%}
+          {%- if n is none -%}?{%- else -%}{{ medals.get(n | int(-1), '') }}{{ n }}{{ 'er' if (n | int(-1)) == 1 else 'e' }}{%- endif -%}
+        {%- endmacro -%}
+        {%- set event_type = state_attr(event_entity, 'event_type') -%}
+        {%- set old_position = state_attr(event_entity, 'old_position') -%}
+        {%- set new_position = state_attr(event_entity, 'new_position') -%}
+        {%- if event_type == 'up' -%}
+          {%- set statut = '📈 <b>Progression au classement !</b>' -%}
+        {%- elif event_type == 'down' -%}
+          {%- set statut = '📉 <b>Recul au classement</b>' -%}
+        {%- else -%}
+          {#- The entity hasn't fired since Home Assistant started (it is not
+              restored on purpose): nothing to show, so no "? → ?" line. -#}
+          {%- set statut = '📊 <b>Aucun changement de classement enregistré</b>' -%}
+        {%- endif -%}
+        🏀 <b>{{ team_title }}</b>
+
+        {{ statut }}{% if event_type in ['up', 'down'] %}
+
+        📊 <b>Position :</b> {{ rank(old_position) }} → {{ rank(new_position) }}{% endif %}
+      inline_keyboard: >-
+        {% set buttons = [ ['🔄 Actualiser', refresh_cmd] ] %}
+        {{ [buttons] }}

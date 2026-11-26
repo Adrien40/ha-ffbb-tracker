@@ -1,0 +1,79 @@
+blueprint:
+  name: FFBB Tracker - Changement de phase (Telegram)
+  description: >-
+    Envoie une notification Telegram quand l'équipe n'a plus aucun match
+    prévu depuis plusieurs jours, ce qui signale en général la fin d'une
+    phase : l'équipe continue dans une nouvelle poule que FFBB Tracker ne
+    suit pas encore. Se base sur le capteur binaire "Changement de phase
+    probable" de FFBB Tracker, et ne se déclenche qu'au moment où il
+    s'allume, jamais au redémarrage de Home Assistant. Le message indique
+    où retrouver l'équipe dans sa nouvelle poule, avec un lien vers la page
+    Corrections de Home Assistant. Le délai se règle dans les options de l'intégration.
+  domain: automation
+  input:
+    phase_change_sensor:
+      name: Capteur "Changement de phase probable"
+      description: >-
+        Choisir le capteur binaire se terminant par "_phase_change_suspected"
+        (traduit "Changement de phase probable" dans l'interface).
+      selector:
+        entity:
+          filter:
+            integration: ffbb_tracker
+            domain: binary_sensor
+    notify_entity:
+      name: Entité Telegram Notify
+      description: Entité notify du bot Telegram (ex. notify.telegram_basket).
+      selector:
+        entity:
+          filter:
+            integration: telegram_bot
+            domain: notify
+    team_title:
+      name: Nom affiché de l'équipe (optionnel)
+      description: Laisser vide pour utiliser le nom configuré dans l'appareil FFBB.
+      default: ""
+      selector:
+        text: {}
+  source_url: https://github.com/Adrien40/ha-ffbb-tracker/blob/main/blueprints/automation/ffbb_tracker/phase_change_notification_telegram.yaml
+
+mode: single
+max_exceeded: silent
+
+variables:
+  team_title_input: !input team_title
+  sensor_entity: !input phase_change_sensor
+  team_title_raw: >-
+    {% if team_title_input | trim != '' %}
+      {{ team_title_input }}
+    {% else %}
+      {% set dev_id = device_id(sensor_entity) %}
+      {{ device_attr(dev_id, 'name') if dev_id else 'FFBB Tracker' }}
+    {% endif %}
+  # HTML-escaped for parse_mode: html below -- team/competition names come
+  # from the FFBB API and can contain &, <, > (club names, sponsors...),
+  # which would otherwise break or truncate the Telegram message.
+  team_title: >-
+    {{ team_title_raw | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') }}
+
+triggers:
+  # off -> on only: a restart (unknown -> on) or an unavailable -> on blip
+  # must not replay the alert.
+  - trigger: state
+    entity_id: !input phase_change_sensor
+    from: "off"
+    to: "on"
+
+actions:
+  - action: telegram_bot.send_message
+    data:
+      entity_id: !input notify_entity
+      parse_mode: html
+      message: |-
+        🏀 <b>{{ team_title }}</b>
+
+        😴 <b>Plus aucun match prévu</b>
+
+        L'équipe n'a plus de match depuis plusieurs jours : elle est probablement passée dans une nouvelle phase.
+
+        👉 Ouvre les <a href="https://my.home-assistant.io/redirect/repairs/">Corrections</a> de Home Assistant pour la retrouver dans sa nouvelle poule.

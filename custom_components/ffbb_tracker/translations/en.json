@@ -1,0 +1,373 @@
+{
+  "title": "FFBB Tracker",
+  "config": {
+    "step": {
+      "user": {
+        "title": "FFBB Tracker",
+        "description": "Enter a club name, city, team URL, or team ID.",
+        "data": {
+          "search_query": "Club, city, team URL, or team ID"
+        }
+      },
+      "club": {
+        "title": "Select Club",
+        "description": "Choose your club from the results.",
+        "data": {
+          "club_id": "Club"
+        }
+      },
+      "team": {
+        "title": "Select Team",
+        "description": "Choose the team to track.",
+        "data": {
+          "team_filter": "Filter teams (optional)",
+          "engagement_id": "Team"
+        },
+        "data_description": {
+          "team_filter": "Type part of a team, category or competition name (e.g. U13) and select Submit to narrow the list. Submit again to confirm the team chosen."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the FFBB API.",
+      "no_clubs_found": "No clubs found for this search.",
+      "too_many_clubs": "More than 100 clubs match this search. Please narrow it down (add the city or the club code).",
+      "no_teams_found": "No teams found for this club.",
+      "invalid_engagement": "Invalid team URL or engagement ID.",
+      "no_poule_found": "No pool found for this team.",
+      "query_too_short": "Please enter at least 2 characters.",
+      "unknown": "Unexpected error.",
+      "no_team_matches": "No team matches this filter. The whole list is shown."
+    },
+    "abort": {
+      "already_configured": "This team is already configured.",
+      "club_not_found": "Club not found.",
+      "reconfigure_successful": "Reconfiguration successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "FFBB Tracker Options",
+        "description": "Configure update polling intervals and optionally enable faster polling around match times to get scores sooner.",
+        "data": {
+          "scan_interval": "Standard update interval (minutes)",
+          "live_polling": "Faster polling on match days",
+          "live_scan_interval": "Live update interval (minutes)",
+          "live_window_after_hours": "Post-match score wait window (hours)",
+          "phase_change_days": "Days without a match before a phase change alert"
+        },
+        "data_description": {
+          "scan_interval": "Check frequency outside match windows (15 to 1440 min).",
+          "live_polling": "Automatically switches to a shorter interval around match times.",
+          "live_scan_interval": "Check frequency in fast polling mode (2 to 15 min).",
+          "live_window_after_hours": "Duration of fast polling mode after kickoff (1 to 6 h).",
+          "phase_change_days": "Days after the team's last match, with nothing scheduled after it (or a team not found), before FFBB Tracker suggests following it to its next phase (1 to 30 days)."
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "game_day": {
+        "name": "Game day",
+        "state": {
+          "off": "No",
+          "on": "Yes"
+        }
+      },
+      "match_in_progress": {
+        "name": "Match in progress",
+        "state": {
+          "off": "No",
+          "on": "Live"
+        }
+      },
+      "phase_change_suspected": {
+        "name": "Phase change suspected",
+        "state": {
+          "off": "No",
+          "on": "Yes"
+        }
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Refresh"
+      }
+    },
+    "calendar": {
+      "schedule": {
+        "name": "Schedule",
+        "state": {
+          "off": "No match",
+          "on": "In progress"
+        }
+      }
+    },
+    "event": {
+      "match_finished": {
+        "name": "Match finished",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "win": "Win",
+              "loss": "Loss",
+              "draw": "Draw"
+            }
+          }
+        }
+      },
+      "rank_changed": {
+        "name": "Rank change",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "up": "Promotion",
+              "down": "Relegation"
+            }
+          }
+        }
+      }
+    },
+    "sensor": {
+      "next_match_date": {
+        "name": "Next match: Date"
+      },
+      "next_match_opponent": {
+        "name": "Next match: Opponent"
+      },
+      "next_match_venue_type": {
+        "name": "Next match: Venue",
+        "state": {
+          "home": "Home",
+          "away": "Away"
+        }
+      },
+      "next_match_location": {
+        "name": "Next match: Location"
+      },
+      "last_match_date": {
+        "name": "Last match: Date"
+      },
+      "last_match_opponent": {
+        "name": "Last match: Opponent"
+      },
+      "last_match_result": {
+        "name": "Last match: Result",
+        "state": {
+          "win": "Win",
+          "loss": "Loss",
+          "draw": "Draw"
+        }
+      },
+      "last_match_score": {
+        "name": "Last match: Score"
+      },
+      "rank": {
+        "name": "Rank"
+      },
+      "rank_evolution": {
+        "name": "Rank evolution",
+        "state_attributes": {
+          "status": {
+            "name": "Status",
+            "state": {
+              "waiting_first_ranking": "Waiting for the first official ranking"
+            }
+          }
+        }
+      },
+      "poule": {
+        "name": "Pool"
+      },
+      "form": {
+        "name": "Recent form"
+      }
+    }
+  },
+  "issues": {
+    "season_rollover": {
+      "title": "FFBB Tracker: {team_name} not found",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "“{team_name}”: what do you want to do?",
+            "description": "“{team_name}” can't be found on the FFBB API. Follow it under its new IDs, or ignore this alert.",
+            "menu_options": {
+              "follow": "Find the team again",
+              "ignore": "Ignore this alert"
+            }
+          },
+          "confirm": {
+            "title": "Find \"{team_name}\" again",
+            "description": "The team \"{team_name}\" has been unavailable on the FFBB API for several days. This typically happens at the start of a season, when the FFBB assigns new engagement and pool IDs. The next steps search for \"{team_name}\" again so it can be tracked under its new IDs. Its existing entities are kept, with their IDs, names and history, so your automations and dashboards keep working."
+          },
+          "search": {
+            "title": "Search for \"{team_name}\"",
+            "description": "Enter a club name, city, team URL, or team ID to find \"{team_name}\" for this season.",
+            "data": {
+              "search_query": "Club, city, team URL, or team ID"
+            }
+          },
+          "club": {
+            "title": "Select Club",
+            "description": "Choose your club from the results.",
+            "data": {
+              "club_id": "Club"
+            }
+          },
+          "team": {
+            "title": "Select Team",
+            "description": "Choose the team to track instead of \"{team_name}\".",
+            "data": {
+              "team_filter": "Filter teams (optional)",
+              "engagement_id": "Team"
+            },
+            "data_description": {
+              "team_filter": "Type part of a team, category or competition name (e.g. U13) and select Submit to narrow the list. Submit again to confirm the team chosen."
+            }
+          }
+        },
+        "error": {
+          "cannot_connect": "Failed to connect to the FFBB API.",
+          "no_clubs_found": "No clubs found for this search.",
+          "too_many_clubs": "More than 100 clubs match this search. Please narrow it down (add the city or the club code).",
+          "no_teams_found": "No teams found for this club.",
+          "invalid_engagement": "Invalid team URL or engagement ID.",
+          "no_poule_found": "No pool found for this team.",
+          "query_too_short": "Please enter at least 2 characters.",
+          "already_configured": "This team is already configured.",
+          "unknown": "Unexpected error.",
+          "no_team_matches": "No team matches this filter. The whole list is shown."
+        },
+        "abort": {
+          "club_not_found": "Club not found.",
+          "entry_not_found": "This team is no longer configured.",
+          "ignored": "Alert ignored."
+        }
+      }
+    },
+    "token_refresh_failing": {
+      "title": "FFBB Tracker: Public token refresh failing",
+      "description": "Updates for \"{team_name}\" are still working thanks to a fallback token, but the automatic refresh of the FFBB public API token has failed several times in a row. This may mean the FFBB has changed its `competitions.ffbb.com` API and this integration will need an update. Consider checking for a newer release, or opening an issue on GitHub if this persists."
+    },
+    "phase_change": {
+      "title": "FFBB Tracker: no match left for {team_name}",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "“{team_name}”: what do you want to do?",
+            "description": "“{team_name}” has no match left to play. Follow it to its next phase, or ignore this alert (for example between two seasons).",
+            "menu_options": {
+              "follow": "Follow the team to its next phase",
+              "ignore": "Ignore this alert"
+            }
+          },
+          "candidate": {
+            "title": "New team found for \"{team_name}\"",
+            "description": "\"{team_name}\" has no match left. The club has a team with the same name under another pool: pick it to track it from now on. Its existing entities are kept, with their IDs, names and history. Tick the box to search for another team instead.",
+            "data": {
+              "team_filter": "Filter teams (optional)",
+              "engagement_id": "Team",
+              "search_other": "Search for another team instead"
+            },
+            "data_description": {
+              "team_filter": "Type part of a team, category or competition name (e.g. U13) and select Submit to narrow the list. Submit again to confirm the team chosen."
+            }
+          },
+          "confirm": {
+            "title": "Find \"{team_name}\" again",
+            "description": "The team \"{team_name}\" has no match left to play. This typically happens when a phase ends, and the team continues under a new pool. The next steps search for \"{team_name}\" again so it can be tracked in its new pool. Its existing entities are kept, with their IDs, names and history, so your automations and dashboards keep working."
+          },
+          "search": {
+            "title": "Search for \"{team_name}\"",
+            "description": "Enter a club name, city, team URL, or team ID to find \"{team_name}\" for this season.",
+            "data": {
+              "search_query": "Club, city, team URL, or team ID"
+            }
+          },
+          "club": {
+            "title": "Select Club",
+            "description": "Choose your club from the results.",
+            "data": {
+              "club_id": "Club"
+            }
+          },
+          "team": {
+            "title": "Select Team",
+            "description": "Choose the team to track instead of \"{team_name}\".",
+            "data": {
+              "team_filter": "Filter teams (optional)",
+              "engagement_id": "Team"
+            },
+            "data_description": {
+              "team_filter": "Type part of a team, category or competition name (e.g. U13) and select Submit to narrow the list. Submit again to confirm the team chosen."
+            }
+          }
+        },
+        "error": {
+          "cannot_connect": "Failed to connect to the FFBB API.",
+          "no_clubs_found": "No clubs found for this search.",
+          "too_many_clubs": "More than 100 clubs match this search. Please narrow it down (add the city or the club code).",
+          "no_teams_found": "No teams found for this club.",
+          "invalid_engagement": "Invalid team URL or engagement ID.",
+          "no_poule_found": "No pool found for this team.",
+          "query_too_short": "Please enter at least 2 characters.",
+          "already_configured": "This team is already configured.",
+          "unknown": "Unexpected error.",
+          "no_team_matches": "No team matches this filter. The whole list is shown."
+        },
+        "abort": {
+          "club_not_found": "Club not found.",
+          "entry_not_found": "This team is no longer configured.",
+          "ignored": "Alert ignored."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "entry_not_found": {
+      "message": "No team matches the config entry \"{entry_id}\". Verify the identifier or omit it to target all tracked teams."
+    },
+    "entry_not_loaded": {
+      "message": "The team for config entry \"{entry_id}\" is not loaded (setup failed, is still in progress, or it was disabled). Check the integration's status, or omit the identifier to target all loaded teams."
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Refresh data",
+      "description": "Forces an immediate coordinator update for FFBB teams.",
+      "fields": {
+        "entry_id": {
+          "name": "Config entry",
+          "description": "Specific config entry to refresh. If omitted, all teams are updated."
+        }
+      }
+    },
+    "get_next_matches": {
+      "name": "Get next matches",
+      "description": "Returns upcoming matches for use in automations or scripts.",
+      "fields": {
+        "entry_id": {
+          "name": "Config entry",
+          "description": "Specific config entry to target."
+        },
+        "limit": {
+          "name": "Limit",
+          "description": "Number of matches to return."
+        }
+      }
+    },
+    "get_standings": {
+      "name": "Get pool standings",
+      "description": "Returns the complete pool standings table.",
+      "fields": {
+        "entry_id": {
+          "name": "Config entry",
+          "description": "Specific config entry to target."
+        }
+      }
+    }
+  }
+}

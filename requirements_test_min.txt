@@ -1,0 +1,10 @@
+# Test dependencies for the oldest Home Assistant release this integration
+# declares (hacs.json "homeassistant" is 2026.3.0).
+#
+# pytest-homeassistant-custom-component has no release for 2026.3.0 -- it goes
+# from 2026.2.3 straight to 2026.3.1 -- so the first patch release it supports
+# is used here.
+homeassistant==2026.3.1
+pytest-homeassistant-custom-component==0.13.317
+pytest-asyncio
+pytest-cov
