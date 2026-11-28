@@ -71,7 +71,7 @@ blueprint:
         text: {}
   source_url: https://github.com/Adrien40/ha-ffbb-tracker/blob/main/blueprints/automation/ffbb_tracker/rank_changed_notification_telegram.yaml
 
-mode: restart
+mode: queued
 max_exceeded: silent
 
 # Le déclencheur du bouton "Actualiser" est évalué avant les variables
@@ -147,16 +147,16 @@ actions:
 
   - condition: template
     # L'anti-doublon au démarrage est géré côté Python (event.py), via
-    # _known_position seedé à la construction de l'entité -- pas par un
-    # mécanisme de restauration Home Assistant (cette entité n'hérite
-    # volontairement pas de RestoreEntity, pour ne pas rejouer un ancien
-    # changement de classement au redémarrage). Ce contrôle vérifie
-    # seulement la validité de l'état reçu et applique le filtre de
-    # direction choisi par l'utilisateur. Il écarte aussi le retour d'un
-    # "unavailable" (panne de l'API) : l'entité revient alors avec son
-    # ancien horodatage et ses anciens attributs, et on ne notifie que si
-    # l'horodatage de l'événement date de moins de 2 minutes. La première branche gère le
-    # clic sur "Exécuter" dans l'UI, où `trigger` n'est pas défini.
+    # _known_position seedé à la construction de l'entité : bien que EventEntity
+    # restaure son dernier événement (et le purge via FRESH_EVENTS lors d'un
+    # changement d'équipe/poule), un ancien changement de classement n'est jamais
+    # re-déclenché au redémarrage. Ce contrôle vérifie seulement la validité de
+    # l'état reçu et applique le filtre de direction choisi par l'utilisateur.
+    # Il écarte aussi le retour d'un "unavailable" (panne de l'API) : l'entité
+    # revient alors avec son ancien horodatage et ses anciens attributs, et on
+    # ne notifie que si l'horodatage de l'événement date de moins de 2 minutes.
+    # La première branche gère le clic sur "Exécuter" dans l'UI, où `trigger`
+    # n'est pas défini.
     value_template: >-
       {% if trigger is not defined or trigger.id is not defined %}
         true
@@ -190,8 +190,8 @@ actions:
         {%- elif event_type == 'down' -%}
           {%- set statut = '📉 <b>Recul au classement</b>' -%}
         {%- else -%}
-          {#- The entity hasn't fired since Home Assistant started (it is not
-              restored on purpose): nothing to show, so no "? → ?" line. -#}
+          {#- The entity has never fired yet (new team or freshly switched
+              pool): nothing to show, so no "? → ?" line. -#}
           {%- set statut = '📊 <b>Aucun changement de classement enregistré</b>' -%}
         {%- endif -%}
         🏀 <b>{{ team_title }}</b>

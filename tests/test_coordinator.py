@@ -46,6 +46,7 @@ from custom_components.ffbb_tracker.const import (
 )
 from custom_components.ffbb_tracker.coordinator import (
     _POULE_CACHE_TTL,
+    _RECHECK_BUCKET_SECONDS,
     FFBBDataUpdateCoordinator,
     _count_results,
     _engagement_id,
@@ -777,6 +778,9 @@ def test_is_played_stays_false_when_joue_false_and_no_score(hass):
         ("42", 42),
         (42, 42),
         ("not-a-number", None),
+        (True, None),
+        (False, None),
+        (float("inf"), None),
     ],
 )
 def test_safe_int_handles_malformed_scores(raw_value, expected):
@@ -1750,7 +1754,16 @@ def test_count_results_counts_only_matches_with_a_result():
 
 @pytest.mark.parametrize(
     ("raw", "expected"),
-    [({"id": 7}, "7"), ({}, ""), ("8", "8"), (9, "9"), (None, "")],
+    [
+        ({"id": 7}, "7"),
+        ({"id": None}, ""),
+        ({}, ""),
+        ("8", "8"),
+        (9, "9"),
+        (None, ""),
+        (True, ""),
+        (["bad"], ""),
+    ],
 )
 def test_engagement_id_accepts_a_nested_object_or_a_plain_id(raw, expected):
     assert _engagement_id(raw) == expected
@@ -1791,7 +1804,7 @@ def test_other_teams_matches_are_never_pending(hass):
     assert coordinator._find_pending_results(_poule(rencontre)) == []
 
 
-@pytest.mark.parametrize("raw_date", [None, "", "not a date"])
+@pytest.mark.parametrize("raw_date", [None, "", "not a date", 12345, ["bad"]])
 def test_a_match_without_a_usable_date_is_never_pending(hass, raw_date):
     coordinator = _make_coordinator(hass)
     rencontre = _unplayed_rencontre("m", dt_util.utcnow())
@@ -1862,10 +1875,12 @@ async def test_recheck_replaces_an_outdated_answer_with_the_fresher_one(hass, fr
     result = await coordinator._async_fetch_poule_data()
 
     assert result is fresh
-    # Same request first, then the differently formulated one, salted by the hour.
+    # Same request first, then the differently formulated one, salted by 10-min bucket.
     assert coordinator.client.get_poule_data.await_args_list == [
         call("poule-1"),
-        call("poule-1", refresh=int(now.timestamp() // 3600)),
+        call(
+            "poule-1", refresh=max(1, int(now.timestamp() // _RECHECK_BUCKET_SECONDS))
+        ),
     ]
     assert coordinator.stale_recheck_attempts == 1
     assert coordinator.stale_responses_detected == 1
@@ -2293,10 +2308,7 @@ async def test_refresh_raises_the_phase_change_issue_once_the_delay_has_passed(h
     assert issue is not None
     assert issue.is_fixable is True
     assert issue.translation_key == "phase_change"
-    assert issue.translation_placeholders == {
-        "team_name": coordinator.team_name,
-        "days": "3",
-    }
+    assert issue.translation_placeholders == {"team_name": coordinator.team_name}
     assert issue.data == {"entry_id": coordinator.config_entry.entry_id}
 
 
@@ -2418,3 +2430,322 @@ def test_a_bye_flagged_as_played_never_becomes_the_last_match(hass):
     assert data.last_match is not None
     assert data.last_match.match_id == "real-1"
     assert [m.match_id for m in data.fixtures] == ["real-1", "bye-1"]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        FFBBNotFoundError("gone"),
+        FFBBConnectionError("down"),
+        FFBBApiError("HTTP 429"),
+    ],
+)
+async def test_failed_refresh_resets_shortened_update_interval_to_base(hass, error):
+    """A 30 s boundary wake-up or 2 min live interval must not persist across
+    an outage, rate limit or end-of-season 404."""
+    coordinator = _make_coordinator(hass)
+    coordinator.update_interval = timedelta(seconds=30)
+    coordinator.client = AsyncMock()
+    coordinator.client.get_poule_data = AsyncMock(side_effect=error)
+
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
+
+    assert coordinator.update_interval == timedelta(minutes=DEFAULT_SCAN_INTERVAL)
+
+
+async def test_token_refresh_issue_is_raised_even_when_refresh_fails(hass):
+    """When both the dynamic token refresh and the fallback token fail with
+    HTTP 401/403, _async_update_data raises UpdateFailed -- and must still
+    surface the token_refresh_failing alert."""
+    coordinator = _make_coordinator(hass)
+    coordinator.client = AsyncMock()
+    coordinator.client.token_refresh_failures = 3
+    coordinator.client.get_poule_data = AsyncMock(
+        side_effect=FFBBApiError("FFBB API returned HTTP 401")
+    )
+
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
+
+    assert (
+        ir.async_get(hass).async_get_issue(DOMAIN, _token_issue_id(coordinator))
+        is not None
+    )
+
+
+async def test_early_rechecks_ten_minutes_apart_vary_the_refresh_shape(hass, freezer):
+    """Two early rechecks 10 minutes apart inside the same clock hour must pass
+    distinct `refresh` values rather than repeating the same cached shape."""
+    freezer.move_to("2026-10-02T14:05:00+00:00")
+    coordinator = _make_coordinator(hass)
+    outdated, fresh = _outdated_and_fresh_aged(dt_util.utcnow(), 1.5)
+    coordinator.client = _FakeClient(outdated, outdated, outdated, fresh)
+
+    await coordinator._async_fetch_poule_data()
+    freezer.tick(timedelta(minutes=10))
+    await coordinator._async_fetch_poule_data()
+
+    recheck_calls = [
+        c.kwargs["refresh"]
+        for c in coordinator.client.get_poule_data.await_args_list
+        if "refresh" in c.kwargs
+    ]
+    assert len(recheck_calls) == 2
+    assert recheck_calls[0] != recheck_calls[1]
+
+
+async def test_sibling_team_can_recheck_its_own_missing_result_on_cache_hit(
+    hass, freezer
+):
+    """Team A has no pending match and fills the shared poule cache; Team B in
+    the same poule hits that cache 5 s later and still rechecks its own match."""
+    now = dt_util.utcnow()
+    sibling_unplayed = _unplayed_rencontre("b-match", now - timedelta(hours=2))
+    sibling_unplayed["idEngagementEquipe1"] = {"id": "engagement-456"}
+    sibling_unplayed["idEngagementEquipe2"] = {"id": "engagement-789"}
+    sibling_played = {
+        **sibling_unplayed,
+        "joue": True,
+        "resultatEquipe1": 71,
+        "resultatEquipe2": 64,
+    }
+    outdated = _poule(sibling_unplayed)
+    fresh = _poule(sibling_played)
+
+    team_a = _make_coordinator(hass)
+    team_a.client = _FakeClient(outdated)
+    team_b = _make_sibling(hass, "engagement-456")
+    team_b.client = _FakeClient(fresh)
+    team_c = _make_sibling(hass, "engagement-789")
+    team_c.client = _FakeClient(outdated)
+
+    assert await team_a._async_fetch_poule_data() is outdated
+    assert team_a.stale_recheck_attempts == 0
+
+    freezer.tick(timedelta(seconds=5))
+    assert await team_b._async_fetch_poule_data() is fresh
+    assert team_b.stale_recheck_attempts == 1
+    assert _get_poule_cache(hass, "poule-1").data is fresh
+
+    # If the score is still missing, a third sibling does not duplicate the
+    # pool-wide recheck within the cooldown window.
+    _get_poule_cache(hass, "poule-1").data = outdated
+    await team_c._async_fetch_poule_data()
+    assert team_c.stale_recheck_attempts == 0
+
+
+async def test_concurrent_startup_waits_for_saved_not_found_streaks(hass):
+    """A second coordinator starting while disk loading is still in flight must
+    wait on the lock instead of observing an empty dict."""
+    since = dt_util.utcnow() - timedelta(days=2)
+    gate = asyncio.Event()
+    load_calls = 0
+
+    async def _slow_load():
+        nonlocal load_calls
+        load_calls += 1
+        await gate.wait()
+        return {NOT_FOUND_TEAM_KEY: since.isoformat()}
+
+    first = _make_coordinator(hass)
+    second = _make_coordinator(hass)
+    store = hass.data.setdefault(DOMAIN, {})["_not_found_store"] = AsyncMock()
+    store.async_load = _slow_load
+
+    task1 = asyncio.create_task(first._async_setup())
+    await asyncio.sleep(0)
+    task2 = asyncio.create_task(second._async_setup())
+    await asyncio.sleep(0)
+    assert not task2.done()
+
+    gate.set()
+    await asyncio.gather(task1, task2)
+
+    assert load_calls == 1
+    assert first._not_found_since == since
+    assert second._not_found_since == since
+
+
+def test_null_json_fields_never_become_literal_none_strings(hass):
+    """Explicit JSON nulls in IDs, numbers or team names map to '' or 'N/A'."""
+    coordinator = _make_coordinator(hass)
+    poule = {
+        "id": "poule-1",
+        "nom": None,
+        "rencontres": [
+            {
+                "id": None,
+                "numero": None,
+                "numeroJournee": None,
+                "joue": False,
+                "nomEquipe1": None,
+                "nomEquipe2": "Adversaire",
+                "date_rencontre": None,
+                "idEngagementEquipe1": {"id": "engagement-123"},
+                "idEngagementEquipe2": {"id": None},
+                "salle": None,
+            }
+        ],
+        "classements": [
+            {
+                "id": "r1",
+                "idEngagement": {"id": None, "nom": None},
+                "nomEquipe": None,
+                "position": 1,
+            },
+            {
+                "id": "r2",
+                "idEngagement": "flat-id",
+                "nomEquipe": None,
+                "position": 2,
+            },
+        ],
+    }
+
+    result = coordinator._process_poule_data(poule)
+    fixture = result.fixtures[0]
+    assert fixture.match_id == ""
+    assert fixture.match_number == ""
+    assert fixture.round_number == ""
+    assert [row["team_name"] for row in result.standings] == ["N/A", "N/A"]
+
+    summary = coordinator._summarize_pending(
+        {"numero": None, "numeroJournee": None}, timedelta(hours=4)
+    )
+    assert summary["match_number"] == ""
+    assert summary["round"] == ""
+
+
+def test_undated_played_match_does_not_override_dated_last_match(hass):
+    """An undated forfeit must not stick after later dated matches all season."""
+    coordinator = _make_coordinator(hass)
+    now = datetime.now(UTC)
+    undated_forfeit = {
+        "id": "forfeit",
+        "numero": "1",
+        "numeroJournee": "1",
+        "joue": True,
+        "resultatEquipe1": 20,
+        "resultatEquipe2": 0,
+        "nomEquipe1": "Basket Landes",
+        "nomEquipe2": "Forfait Club",
+        "date_rencontre": None,
+        "idEngagementEquipe1": {"id": "engagement-123"},
+        "idEngagementEquipe2": {"id": "engagement-456"},
+        "salle": None,
+    }
+    only_forfeit = coordinator._process_poule_data(_poule(undated_forfeit))
+    assert only_forfeit.last_match is not None
+    assert only_forfeit.last_match.match_id == "forfeit"
+
+    with_dated = coordinator._process_poule_data(
+        _poule(
+            _played_rencontre("dated-match", now - timedelta(days=2)), undated_forfeit
+        )
+    )
+    assert with_dated.last_match is not None
+    assert with_dated.last_match.match_id == "dated-match"
+
+
+async def test_naive_ffbb_dates_are_parsed_in_europe_paris_whatever_ha_zone(hass):
+    """Naive FFBB datetimes represent French local time, even on a UTC HA host."""
+    await hass.config.async_set_time_zone("UTC")
+    coordinator = _make_coordinator(hass)
+    summer_match = _unplayed_rencontre("summer", datetime.now(UTC))
+    summer_match["date_rencontre"] = "2026-09-26T16:00:00"  # CEST = UTC+2 -> 14:00 UTC
+    winter_match = _unplayed_rencontre("winter", datetime.now(UTC))
+    winter_match["date_rencontre"] = "2026-01-10T20:00:00"  # CET = UTC+1 -> 19:00 UTC
+
+    data = coordinator._process_poule_data(_poule(winter_match, summer_match))
+
+    by_id = {m.match_id: m.match_date for m in data.fixtures}
+    assert by_id["winter"] == datetime(2026, 1, 10, 19, 0, tzinfo=UTC)
+    assert by_id["summer"] == datetime(2026, 9, 26, 14, 0, tzinfo=UTC)
+
+
+def test_non_string_dates_and_numeric_postal_codes_never_raise(hass):
+    """Malformed non-string dates and integer postal codes must not raise TypeError."""
+    coordinator = _make_coordinator(hass)
+    weird_match = {
+        "id": "m-weird",
+        "numero": 42,
+        "numeroJournee": 3,
+        "joue": False,
+        "nomEquipe1": ["bad"],
+        "nomEquipe2": 999,
+        "date_rencontre": 1760000000,
+        "idEngagementEquipe1": {"id": "engagement-123"},
+        "idEngagementEquipe2": {"id": "engagement-456"},
+        "salle": {
+            "libelle": "Gymnase",
+            "adresse": 12,
+            "commune": {"libelle": "Dax", "codePostal": 40100},
+        },
+    }
+
+    data = coordinator._process_poule_data(_poule(weird_match))
+
+    assert len(data.fixtures) == 1
+    fixture = data.fixtures[0]
+    assert fixture.match_date is None
+    assert fixture.team_name == "Basket Landes"
+    assert fixture.opponent_name == "999"
+    assert fixture.opponent_engagement_id == "engagement-456"
+    assert fixture.gym_postal_code == "40100"
+    assert fixture.formatted_address == "Gymnase, 12, 40100, Dax"
+
+
+def test_standings_expose_initial_points_irregularities_and_engagement_id(hass):
+    """Standings rows expose `initial_points` (and `irregularities` for the card's
+    'I' column) from Directus's `pointsInitiaux`, plus `engagement_id`."""
+    coordinator = _make_coordinator(hass)
+    data = {
+        "id": "poule-1",
+        "nom": "Poule A",
+        "rencontres": [],
+        "classements": [
+            {
+                "id": "r1",
+                "idEngagement": {"id": "engagement-123", "nom": "Basket Landes"},
+                "position": 1,
+                "points": 8,
+                "pointsInitiaux": "2",
+            },
+            {
+                "id": "r-bye",
+                "idEngagement": None,
+                "position": 2,
+            },
+        ],
+    }
+
+    standings = coordinator._process_poule_data(data).standings
+
+    assert standings[0]["engagement_id"] == "engagement-123"
+    assert standings[0]["initial_points"] == 2
+    assert standings[0]["irregularities"] == 2
+    assert standings[1]["engagement_id"] is None
+    assert standings[1]["initial_points"] is None
+    assert standings[1]["irregularities"] is None
+
+
+async def test_recheck_replaces_outdated_answer_when_pending_match_was_rescheduled(
+    hass, freezer
+):
+    """A postponed match (moved to the future, still unplayed) clears pending
+    results even though `_count_results` did not increase."""
+    coordinator = _make_coordinator(hass)
+    now = dt_util.utcnow()
+    outdated = _poule(_unplayed_rencontre("m-postponed", now - timedelta(hours=2)))
+    rescheduled = _poule(_unplayed_rencontre("m-postponed", now + timedelta(days=14)))
+    coordinator.client = _FakeClient(outdated, rescheduled)
+
+    result = await coordinator._async_fetch_poule_data()
+
+    assert result is rescheduled
+    assert coordinator.stale_recheck_attempts == 1
+    assert coordinator.stale_responses_detected == 1
+    assert coordinator.last_recheck_outcome == (
+        "fresher_response_used (1 rescheduled/cleared)"
+    )

@@ -16,7 +16,13 @@ from homeassistant.helpers.typing import ConfigType
 
 from .api import FFBBClient, FFBBRateLimiter
 from .const import CONF_ENGAGEMENT_ID, CONF_POULE_ID, DOMAIN
-from .coordinator import FFBBDataUpdateCoordinator, forget_not_found
+from .coordinator import (
+    FFBBDataUpdateCoordinator,
+    delete_team_issues,
+    drop_unused_poule_cache,
+    forget_not_found,
+    str_or_empty,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -106,34 +112,21 @@ async def async_unload_entry(hass: HomeAssistant, entry: FFBBConfigEntry) -> boo
     loaded team still tracks the same poule.
     """
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        _drop_unused_poule_cache(hass, entry)
+        drop_unused_poule_cache(
+            hass,
+            str_or_empty(entry.data.get(CONF_POULE_ID)),
+            exclude_entry_id=entry.entry_id,
+        )
 
     return unload_ok
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: FFBBConfigEntry) -> None:
-    """Forget the saved 404 streak of a team that is no longer tracked."""
-    forget_not_found(
-        hass,
-        str(entry.data.get(CONF_ENGAGEMENT_ID, "")),
-        str(entry.data.get(CONF_POULE_ID, "")),
-    )
-
-
-def _drop_unused_poule_cache(hass: HomeAssistant, entry: FFBBConfigEntry) -> None:
-    """Forget the cached poule payload once no loaded team needs it."""
-    poule_id = str(entry.data.get(CONF_POULE_ID, ""))
-    still_used = any(
-        str(other.data.get(CONF_POULE_ID, "")) == poule_id
-        for other in hass.config_entries.async_loaded_entries(DOMAIN)
-        if other.entry_id != entry.entry_id
-    )
-    if still_used:
-        return
-
-    poule_caches = hass.data.get(DOMAIN, {}).get("_poule_cache")
-    if isinstance(poule_caches, dict):
-        poule_caches.pop(poule_id, None)
+    """Forget the saved 404 streak and repair alerts of a removed team."""
+    engagement_id = str_or_empty(entry.data.get(CONF_ENGAGEMENT_ID))
+    poule_id = str_or_empty(entry.data.get(CONF_POULE_ID))
+    forget_not_found(hass, engagement_id, poule_id)
+    delete_team_issues(hass, engagement_id)
 
 
 def _resolve_target_entries(
@@ -206,7 +199,9 @@ def async_setup_services(hass: HomeAssistant) -> None:
                     "is_home": match.is_home,
                     "gym": match.gym_name,
                     "address": match.gym_address,
+                    "postal_code": match.gym_postal_code,
                     "city": match.gym_city,
+                    "formatted_address": match.formatted_address,
                 }
                 for match in coordinator.upcoming_matches(coordinator.data)[:limit]
             ]

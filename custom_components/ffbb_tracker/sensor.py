@@ -37,8 +37,8 @@ from .const import (
     FRESH_RANK_EVOLUTION,
     RANK_STATUS_WAITING_FIRST_RANKING,
 )
-from .coordinator import FFBBDataUpdateCoordinator
-from .entity import navigation_attributes, team_device_info
+from .coordinator import FFBBDataUpdateCoordinator, _safe_int
+from .entity import navigation_attributes, primary_language, team_device_info
 
 PARALLEL_UPDATES = 0
 
@@ -60,26 +60,12 @@ _FORM_LETTERS: dict[str, dict[str, str]] = {
 
 def _get_form_letters(hass: HomeAssistant | None) -> dict[str, str]:
     """Return the win/loss/draw letter codes matching the instance language."""
-    language: str | None = getattr(getattr(hass, "config", None), "language", None)
-    return (
-        _FORM_LETTERS.get(language, _FORM_LETTERS["en"])
-        if language
-        else _FORM_LETTERS["en"]
-    )
+    return _FORM_LETTERS.get(primary_language(hass), _FORM_LETTERS["en"])
 
 
 def _safe_int_value(val: Any) -> int | None:
     """Defensively parse integer values from raw payloads or restored state."""
-    if val is None or val == "":
-        return None
-    try:
-        return int(val)
-    # No parentheses needed: PEP 758 (Python 3.14+, see pyproject.toml's
-    # requires-python) allows a bare comma-separated except list as long as
-    # there's no `as` clause. Not a Python 2 leftover -- don't "fix" this
-    # back to `except (ValueError, TypeError):`.
-    except ValueError, TypeError:
-        return None
+    return _safe_int(val)
 
 
 async def async_setup_entry(
@@ -175,7 +161,7 @@ class FFBBNextMatchOpponentSensor(FFBBSensorBase):
     def native_value(self) -> str | None:
         """Return the name of the next opponent."""
         if self.coordinator.data and self.coordinator.data.next_match:
-            return self.coordinator.data.next_match.opponent_name
+            return self.coordinator.data.next_match.opponent_name[:255]
         return None
 
     @property
@@ -279,6 +265,7 @@ class FFBBNextMatchLocationSensor(FFBBSensorBase):
             ATTR_GYM_NAME: match.gym_name,
             ATTR_GYM_ADDRESS: match.gym_address,
             ATTR_GYM_CITY: match.gym_city,
+            "formatted_address": match.formatted_address,
             **navigation_attributes(match.formatted_address),
             ATTR_TEAM_LOGO_URL: match.team_logo_url,
             ATTR_OPPONENT_LOGO_URL: match.opponent_logo_url,
@@ -339,7 +326,7 @@ class FFBBLastMatchOpponentSensor(FFBBSensorBase):
     def native_value(self) -> str | None:
         """Return the name of the last opponent."""
         if self.coordinator.data and self.coordinator.data.last_match:
-            return self.coordinator.data.last_match.opponent_name
+            return self.coordinator.data.last_match.opponent_name[:255]
         return None
 
     @property
@@ -606,8 +593,8 @@ class FFBBPouleSensor(FFBBSensorBase):
     @property
     def native_value(self) -> str | None:
         """Return the pool name."""
-        if self.coordinator.data:
-            return self.coordinator.data.poule_name or None
+        if self.coordinator.data and self.coordinator.data.poule_name:
+            return self.coordinator.data.poule_name[:255]
         return None
 
     @property
@@ -616,6 +603,7 @@ class FFBBPouleSensor(FFBBSensorBase):
         if not self.coordinator.data:
             return {}
 
+        own_id = self.coordinator.data.engagement_id or None
         calendar_matches: list[dict[str, Any]] = []
         for match in self.coordinator.data.fixtures:
             is_home = match.is_home
@@ -626,6 +614,9 @@ class FFBBPouleSensor(FFBBSensorBase):
             away_logo = match.opponent_logo_url if is_home else match.team_logo_url
             home_url = match.team_url if is_home else match.opponent_url
             away_url = match.opponent_url if is_home else match.team_url
+            opp_id = match.opponent_engagement_id or None
+            home_engagement_id = own_id if is_home else opp_id
+            away_engagement_id = opp_id if is_home else own_id
 
             score: str | None = None
             if (
@@ -644,6 +635,8 @@ class FFBBPouleSensor(FFBBSensorBase):
                     "match_number": match.match_number,
                     "home_team": home_team,
                     "away_team": away_team,
+                    "home_engagement_id": home_engagement_id,
+                    "away_engagement_id": away_engagement_id,
                     "home_logo": home_logo,
                     "away_logo": away_logo,
                     "home_url": home_url,
@@ -667,6 +660,7 @@ class FFBBPouleSensor(FFBBSensorBase):
         return {
             "competition": self.coordinator.data.competition_name,
             "team": self.coordinator.data.team_name,
+            "engagement_id": self.coordinator.data.engagement_id,
             "url": f"https://competitions.ffbb.com/poule/{self.coordinator.poule_id}",
             "calendar": calendar_matches,
         }

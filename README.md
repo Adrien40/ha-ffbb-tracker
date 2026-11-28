@@ -266,8 +266,9 @@ actions:
       {% elif trigger.id == 'callback_refresh' %}
         true
       {% elif trigger.id == 'eve_reminder' %}
-        {% set match_dt = as_datetime(states('sensor.my_team_next_match_date')) %}
-        {{ match_dt is not none and match_dt.astimezone().date() == (now().date() + timedelta(days=1)) }}
+        {% set match_utc = as_datetime(states('sensor.my_team_next_match_date'), default=none) %}
+        {% set match_dt = as_local(match_utc) if match_utc is not none else none %}
+        {{ match_dt is not none and match_dt.date() == (now().date() + timedelta(days=1)) }}
       {% elif trigger.id == 'schedule_alert' %}
         {{ trigger.from_state is not none and
            trigger.to_state is not none and
@@ -280,8 +281,10 @@ actions:
     data:
       title: 🏀 My Team
       message: >-
-        {%- set dt =
-        as_datetime(states('sensor.my_team_next_match_date')) -%}
+        {%- set dt_utc =
+        as_datetime(states('sensor.my_team_next_match_date'), default=none) -%}
+
+        {%- set dt = as_local(dt_utc) if dt_utc is not none else none -%}
 
         {%- set days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday',
         'Saturday', 'Sunday'] -%}
@@ -303,7 +306,7 @@ actions:
           {%- endif -%}
         {%- else -%}
           {%- if dt is not none -%}
-            {%- set delta = (dt.astimezone().date() - now().date()).days -%}
+            {%- set delta = (dt.date() - now().date()).days -%}
             {%- set status = '🔥 Match today!' if delta == 0 else ('🔥 Match tomorrow!' if delta == 1 else ('⏳ Match in ' ~ delta ~ ' days!' if delta > 1 else '🏀 Next match')) -%}
           {%- else -%}
             {%- set status = '🏀 Next match' -%}

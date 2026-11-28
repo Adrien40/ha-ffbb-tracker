@@ -43,6 +43,7 @@ from .const import (
     CONF_TEAM_NAME,
     DOMAIN,
 )
+from .coordinator import _engagement_id, str_or_empty
 from .team_picker import (
     MIN_SEARCH_QUERY_LENGTH,
     TeamChooser,
@@ -81,7 +82,7 @@ class SeasonRolloverRepairFlow(RepairsFlow):
     def _reference_competition(self) -> str:
         """Return the competition of the tracked team, to sort the list by."""
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
-        return str(entry.data.get(CONF_COMPETITION_NAME, "")) if entry else ""
+        return str_or_empty(entry.data.get(CONF_COMPETITION_NAME)) if entry else ""
 
     def _placeholders(self) -> dict[str, str]:
         """Return the team name for the step texts.
@@ -90,7 +91,9 @@ class SeasonRolloverRepairFlow(RepairsFlow):
         custom repair flow, so every form passes them explicitly.
         """
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
-        return {"team_name": str(entry.data.get(CONF_TEAM_NAME, "")) if entry else ""}
+        return {
+            "team_name": str_or_empty(entry.data.get(CONF_TEAM_NAME)) if entry else ""
+        }
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -99,8 +102,11 @@ class SeasonRolloverRepairFlow(RepairsFlow):
 
         Home Assistant calls this with the data the flow was started with
         ({"issue_id": ...}) as `user_input`; it is not a choice and is not
-        used.
+        used. If the config entry was removed before the user opened this
+        dialog, close the stale repair issue straight away.
         """
+        if self.hass.config_entries.async_get_entry(self._entry_id) is None:
+            return self.async_create_entry(data={})
         return self.async_show_menu(
             step_id="init",
             menu_options=["follow", "ignore"],
@@ -110,12 +116,14 @@ class SeasonRolloverRepairFlow(RepairsFlow):
     async def async_step_follow(
         self, user_input: dict[str, Any] | None = None
     ) -> data_entry_flow.FlowResult:
-        """Follow the team: explain what is about to happen.
+        """Follow the team: open the team search directly.
 
-        `user_input` must not be passed on to the confirm step, which would
-        take it for the user's confirmation and skip the explanation.
+        `user_input` must not be forwarded to `async_step_search`, which would
+        treat the menu payload as a submitted search form.
         """
-        return await self.async_step_confirm()
+        if self.hass.config_entries.async_get_entry(self._entry_id) is None:
+            return self.async_create_entry(data={})
+        return await self.async_step_search()
 
     async def async_step_ignore(
         self, user_input: dict[str, Any] | None = None
@@ -124,23 +132,6 @@ class SeasonRolloverRepairFlow(RepairsFlow):
         if ir.async_get(self.hass).async_get_issue(DOMAIN, self.issue_id) is not None:
             ir.async_ignore_issue(self.hass, DOMAIN, self.issue_id, True)
         return self.async_abort(reason="ignored")
-
-    async def async_step_confirm(
-        self, user_input: dict[str, Any] | None = None
-    ) -> data_entry_flow.FlowResult:
-        """Explain, then move on to the team search."""
-        if user_input is not None:
-            if self.hass.config_entries.async_get_entry(self._entry_id) is None:
-                # The integration entry was deleted before the user got here:
-                # nothing left to fix, so just close the repair.
-                return self.async_create_entry(data={})
-            return await self.async_step_search()
-
-        return self.async_show_form(
-            step_id="confirm",
-            data_schema=vol.Schema({}),
-            description_placeholders=self._placeholders(),
-        )
 
     async def async_step_search(
         self, user_input: dict[str, Any] | None = None
@@ -173,9 +164,10 @@ class SeasonRolloverRepairFlow(RepairsFlow):
                             error = club_error
                     errors["base"] = error or "unknown"
                 else:
-                    organisme = engagement.get("idOrganisme") or {}
                     data, title = build_entry(
-                        engagement, engagement_id, str(organisme.get("id", ""))
+                        engagement,
+                        engagement_id,
+                        _engagement_id(engagement.get("idOrganisme")),
                     )
                     result, error = self._switch_entry(engagement_id, data, title)
                     if result is not None:
@@ -203,9 +195,13 @@ class SeasonRolloverRepairFlow(RepairsFlow):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            selected_id = str(user_input["club_id"])
+            selected_id = str_or_empty(user_input.get("club_id"))
             self._selected_club = next(
-                (club for club in self._clubs if str(club.get("id")) == selected_id),
+                (
+                    club
+                    for club in self._clubs
+                    if str_or_empty(club.get("id")) == selected_id
+                ),
                 None,
             )
             if self._selected_club is None:
@@ -240,18 +236,20 @@ class SeasonRolloverRepairFlow(RepairsFlow):
         errors: dict[str, str] = {}
 
         if user_input is not None and not chooser.apply_filter(user_input):
-            engagement_id = str(user_input["engagement_id"])
+            engagement_id = str_or_empty(user_input.get("engagement_id"))
             selected = next(
                 (
                     eng
                     for eng in self._engagements
-                    if str(eng.get("id")) == engagement_id
+                    if str_or_empty(eng.get("id")) == engagement_id
                 ),
                 None,
             )
             if selected is not None:
                 organisme_id = (
-                    str(self._selected_club.get("id")) if self._selected_club else ""
+                    str_or_empty(self._selected_club.get("id"))
+                    if self._selected_club
+                    else ""
                 )
                 data, title = build_entry(selected, engagement_id, organisme_id)
                 result, error = self._switch_entry(engagement_id, data, title)
@@ -290,7 +288,9 @@ class SeasonRolloverRepairFlow(RepairsFlow):
         if existing is not None and existing.entry_id != entry.entry_id:
             return None, "already_configured"
 
-        migrate_entities(self.hass, entry, engagement_id)
+        migrate_entities(
+            self.hass, entry, engagement_id, new_poule_id=data[CONF_POULE_ID]
+        )
         self.hass.config_entries.async_update_entry(
             entry, data=data, title=title, unique_id=engagement_id
         )
@@ -320,22 +320,23 @@ class PhaseChangeRepairFlow(SeasonRolloverRepairFlow):
     ) -> data_entry_flow.FlowResult:
         """Look for the team's new entry, then propose it or fall back."""
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
-        if entry is not None:
-            self._organisme_id = str(entry.data.get(CONF_ORGANISME_ID, ""))
-            self._candidates = await self._async_find_candidates(
-                self._organisme_id,
-                str(entry.data.get(CONF_TEAM_NAME, "")),
-                (
-                    str(entry.data.get(CONF_ENGAGEMENT_ID, "")),
-                    str(entry.data.get(CONF_POULE_ID, "")),
-                ),
-            )
+        if entry is None:
+            return self.async_create_entry(data={})
+        self._organisme_id = str_or_empty(entry.data.get(CONF_ORGANISME_ID))
+        self._candidates = await self._async_find_candidates(
+            self._organisme_id,
+            str_or_empty(entry.data.get(CONF_TEAM_NAME)),
+            (
+                str_or_empty(entry.data.get(CONF_ENGAGEMENT_ID)),
+                str_or_empty(entry.data.get(CONF_POULE_ID)),
+            ),
+        )
         if self._candidates:
             self._candidate_chooser = TeamChooser(
                 self._candidates, self._reference_competition()
             )
             return await self.async_step_candidate()
-        return await super().async_step_follow()
+        return await self.async_step_search()
 
     async def _async_find_candidates(
         self, organisme_id: str, team_name: str, current: tuple[str, str]
@@ -354,8 +355,12 @@ class PhaseChangeRepairFlow(SeasonRolloverRepairFlow):
         return [
             eng
             for eng in engagements
-            if str(eng.get("nom", "")).strip().casefold() == wanted
-            and (str(eng["id"]), str(eng["idPoule"]["id"])) != current
+            if str_or_empty(eng.get("nom")).strip().casefold() == wanted
+            and (
+                str_or_empty(eng.get("id")),
+                _engagement_id(eng.get("idPoule")),
+            )
+            != current
         ]
 
     async def async_step_candidate(
@@ -372,9 +377,13 @@ class PhaseChangeRepairFlow(SeasonRolloverRepairFlow):
         if user_input is not None and not chooser.apply_filter(user_input):
             if user_input.get("search_other"):
                 return await self.async_step_search()
-            engagement_id = str(user_input["engagement_id"])
+            engagement_id = str_or_empty(user_input.get("engagement_id"))
             selected = next(
-                (eng for eng in self._candidates if str(eng["id"]) == engagement_id),
+                (
+                    eng
+                    for eng in self._candidates
+                    if str_or_empty(eng.get("id")) == engagement_id
+                ),
                 None,
             )
             if selected is not None:

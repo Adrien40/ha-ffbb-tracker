@@ -71,7 +71,7 @@ blueprint:
         text: {}
   source_url: https://github.com/Adrien40/ha-ffbb-tracker/blob/main/blueprints/automation/ffbb_tracker/match_result_notification_telegram.yaml
 
-mode: restart
+mode: queued
 max_exceeded: silent
 
 # Le déclencheur du bouton "Actualiser" est évalué avant les variables
@@ -190,19 +190,19 @@ actions:
           {%- if e.startswith('sensor.') -%}
             {%- if state_attr(e, 'current_streak') is not none -%}
               {%- set ns.form = e -%}
-            {%- elif 'date' in e and ('dernier' in e or 'last' in e) -%}
+            {%- elif '_dernier_match_date' in e or '_last_match_date' in e -%}
               {%- set ns.last_date = e -%}
-            {%- elif ('resultat' in e or 'result' in e) and ('dernier' in e or 'last' in e) -%}
+            {%- elif '_dernier_match_resultat' in e or '_last_match_result' in e -%}
               {%- set ns.last_result = e -%}
-            {%- elif 'score' in e and ('dernier' in e or 'last' in e) -%}
+            {%- elif '_dernier_match_score' in e or '_last_match_score' in e -%}
               {%- set ns.last_score = e -%}
-            {%- elif ('adversaire' in e or 'opponent' in e or 'equipe' in e) and ('dernier' in e or 'last' in e) -%}
+            {%- elif '_dernier_match_adversaire' in e or '_last_match_opponent' in e -%}
               {%- set ns.last_opponent = e -%}
             {%- endif -%}
           {%- endif -%}
         {%- endfor -%}
         {%- for e in dev_ents -%}
-          {%- if e.startswith('sensor.') and 'prochain' not in e and 'next' not in e -%}
+          {%- if e.startswith('sensor.') and '_prochain_match_' not in e and '_next_match_' not in e -%}
             {%- if not ns.last_date and state_attr(e, 'round') is not none and state_attr(e, 'result_grace_hours') is none -%}
               {%- set ns.last_date = e -%}
             {%- elif not ns.last_score and state_attr(e, 'team_score') is not none -%}

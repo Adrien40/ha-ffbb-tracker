@@ -142,6 +142,9 @@ def _make_team_data(**overrides) -> FFBBTeamData:
         ("3", 3),
         (3, 3),
         ("not-a-number", None),
+        (True, None),
+        (False, None),
+        (float("inf"), None),
     ],
 )
 def test_safe_int_value_handles_malformed_input(raw_value, expected):
@@ -486,11 +489,28 @@ def test_poule_sensor_reports_name_and_attrs(hass):
     assert sensor.native_value == "Excellence - Poule A"
     assert sensor.extra_state_attributes["competition"] == "Excellence Régionale"
     assert sensor.extra_state_attributes["team"] == "Basket Landes"
+    assert sensor.extra_state_attributes["engagement_id"] == "engagement-123"
     assert (
         sensor.extra_state_attributes["url"]
         == "https://competitions.ffbb.com/poule/poule-1"
     )
     assert sensor.extra_state_attributes["calendar"] == []
+
+
+def test_poule_sensor_none_when_name_empty_and_truncates_over_255(hass):
+    coordinator = _make_coordinator(hass)
+    coordinator.data = _make_team_data(poule_name="")
+    assert FFBBPouleSensor(coordinator).native_value is None
+
+    coordinator.data = _make_team_data(poule_name="P" * 300)
+    assert len(FFBBPouleSensor(coordinator).native_value) == 255
+
+    coordinator.data = _make_team_data(
+        next_match=_make_match(opponent_name="N" * 300),
+        last_match=_make_match(opponent_name="L" * 300, is_played=True),
+    )
+    assert len(FFBBNextMatchOpponentSensor(coordinator).native_value) == 255
+    assert len(FFBBLastMatchOpponentSensor(coordinator).native_value) == 255
 
 
 def test_poule_sensor_none_before_first_refresh(hass):
@@ -520,6 +540,7 @@ def test_poule_sensor_calendar_formats_home_and_away_matches(hass):
         is_home=True,
         team_name="Basket Landes",
         opponent_name="US Mont-de-Marsan",
+        opponent_engagement_id="engagement-456",
         team_logo_url="https://api.ffbb.app/assets/landes.png",
         opponent_logo_url="https://api.ffbb.app/assets/mdm.png",
         team_url="https://ffbb.com/landes",
@@ -589,6 +610,8 @@ def test_poule_sensor_calendar_formats_home_and_away_matches(hass):
     assert calendar[0]["match_number"] == "101"
     assert calendar[0]["home_team"] == "Basket Landes"
     assert calendar[0]["away_team"] == "US Mont-de-Marsan"
+    assert calendar[0]["home_engagement_id"] == "engagement-123"
+    assert calendar[0]["away_engagement_id"] == "engagement-456"
     assert calendar[0]["home_logo"] == "https://api.ffbb.app/assets/landes.png"
     assert calendar[0]["away_logo"] == "https://api.ffbb.app/assets/mdm.png"
     assert calendar[0]["home_url"] == "https://ffbb.com/landes"
@@ -1169,18 +1192,20 @@ def test_rank_sensor_attrs_empty_before_first_refresh(hass):
 # ---------------------------------------------------------------------------
 
 
-def test_get_form_letters_returns_french_for_french_instance(hass):
-    """When hass.config.language is 'fr', French letter codes must be used."""
-    hass.config.language = "fr"
+@pytest.mark.parametrize("language", ["fr", "fr-FR", "fr_BE", "FR"])
+def test_get_form_letters_returns_french_for_french_instance(hass, language):
+    """French and regional French language tags must use French letter codes."""
+    hass.config.language = language
 
     letters = _get_form_letters(hass)
 
     assert letters == {"win": "V", "loss": "D", "draw": "N"}
 
 
-def test_get_form_letters_defaults_to_english_for_other_languages(hass):
-    """An unsupported language code must fall back to English, not crash."""
-    hass.config.language = "de"
+@pytest.mark.parametrize("language", ["de", "en-US", ""])
+def test_get_form_letters_defaults_to_english_for_other_languages(hass, language):
+    """An unsupported or blank language code must fall back to English."""
+    hass.config.language = language
 
     letters = _get_form_letters(hass)
 
@@ -1412,12 +1437,15 @@ def _standings_rows(count: int) -> list[dict]:
     return [
         {
             "position": i + 1,
+            "engagement_id": f"2000000034567{i:02d}",
             "team_name": "BASKET CLUB SAINTE SIGOLENE 1",
             "points": 30,
             "played": 15,
             "won": 13,
             "lost": 2,
             "draws": 0,
+            "initial_points": 0,
+            "irregularities": 0,
             "forfeits": 0,
             "defaults": 0,
             "referee_penalties": 0,
@@ -1507,3 +1535,16 @@ def test_match_number_disappears_with_the_match(hass, sensor_class):
     coordinator.data = _make_team_data(next_match=None)
 
     assert sensor_class(coordinator).extra_state_attributes == {}
+
+
+def test_next_match_location_sensor_exposes_formatted_address(hass):
+    """README documents `formatted_address` on `next_match_location` alongside
+    `next_match_opponent`, `last_match_date` and `poule.calendar`."""
+    coordinator = _make_coordinator(hass)
+    coordinator.data = _make_team_data(next_match=_make_match())
+
+    attrs = FFBBNextMatchLocationSensor(coordinator).extra_state_attributes
+
+    assert attrs["formatted_address"] == (
+        "Gymnase Andre Chavanne, 1 rue du Stade, 40000, Mont-de-Marsan"
+    )

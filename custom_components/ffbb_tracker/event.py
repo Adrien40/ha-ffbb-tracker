@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from homeassistant.components.event import EventEntity
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -19,6 +19,8 @@ from .const import (
     ATTR_ROUND,
     ATTR_TEAM_SCORE,
     ATTRIBUTION,
+    DOMAIN,
+    FRESH_EVENTS,
 )
 from .coordinator import FFBBDataUpdateCoordinator, FFBBTeamData
 from .entity import team_device_info
@@ -53,6 +55,14 @@ class FFBBBaseEvent(CoordinatorEntity[FFBBDataUpdateCoordinator], EventEntity):
         self._attr_unique_id = f"{coordinator.engagement_id}_{key}"
         self._attr_device_info = team_device_info(coordinator)
 
+    async def async_get_last_state(self) -> State | None:
+        """Ignore the previous team's last event right after a team or pool switch."""
+        fresh: set[str] | None = self.hass.data.get(DOMAIN, {}).get(FRESH_EVENTS)
+        if fresh is not None and self.unique_id in fresh:
+            fresh.discard(self.unique_id)
+            return None
+        return await super().async_get_last_state()
+
 
 class FFBBMatchFinishedEvent(FFBBBaseEvent):
     """Fires once when a new match result is published.
@@ -75,8 +85,8 @@ class FFBBMatchFinishedEvent(FFBBBaseEvent):
 
     @staticmethod
     def _last_match_id(data: FFBBTeamData | None) -> str | None:
-        """Return the id of the current last_match, or None."""
-        if data and data.last_match:
+        """Return the id of the current last_match once its result is known."""
+        if data and data.last_match and data.last_match.result is not None:
             return data.last_match.match_id
         return None
 
@@ -117,7 +127,8 @@ class FFBBMatchFinishedEvent(FFBBBaseEvent):
                 },
             )
 
-        self._known_last_match_id = new_id
+        if new_id is not None:
+            self._known_last_match_id = new_id
         super()._handle_coordinator_update()
 
 

@@ -31,6 +31,7 @@ from custom_components.ffbb_tracker.const import (
     CONF_POULE_ID,
     CONF_TEAM_NAME,
     DOMAIN,
+    FRESH_EVENTS,
 )
 from custom_components.ffbb_tracker.coordinator import (
     FFBBDataUpdateCoordinator,
@@ -298,6 +299,21 @@ def test_match_finished_ignores_a_result_less_played_match(hass):
 
     assert entity.state is None
 
+    # Once the scores and result finally arrive for that same match, it MUST fire.
+    coordinator.data = _make_team_data(
+        last_match=_make_match(
+            match_id="match-2",
+            team_score=72,
+            opponent_score=65,
+            result="win",
+        )
+    )
+    entity._handle_coordinator_update()
+
+    assert entity.state is not None
+    assert entity.state_attributes["event_type"] == "win"
+    assert entity.state_attributes["point_difference"] == 7
+
 
 def test_match_finished_handles_no_last_match_yet(hass):
     """A team with no played match yet must not raise and must not fire."""
@@ -372,6 +388,34 @@ async def test_match_finished_event_that_never_fired_restores_nothing(hass):
 
     assert entity.state_attributes.get("event_type") is None
     assert "opponent" not in entity.state_attributes
+
+
+async def test_migrated_event_entity_ignores_restored_state_from_old_team(hass):
+    """Right after a team/pool switch, EventEntity must not restore the old team's
+    last event onto the newly tracked team."""
+    entity = FFBBMatchFinishedEvent(_make_coordinator(hass))
+    entity.hass = hass
+    entity.platform = MockEntityPlatform(hass, domain="event", platform_name=DOMAIN)
+    entity.entity_id = "event.basket_landes_fin_de_match"
+    hass.data.setdefault(DOMAIN, {})[FRESH_EVENTS] = {entity.unique_id}
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (
+                State(entity.entity_id, "2026-01-17T21:30:00.000+00:00"),
+                {
+                    "last_event_type": "win",
+                    "last_event_attributes": {"opponent": "Old Club", "round": "5"},
+                },
+            )
+        ],
+    )
+
+    await entity.async_internal_added_to_hass()
+
+    assert entity.state_attributes.get("event_type") is None
+    assert "opponent" not in entity.state_attributes
+    assert hass.data[DOMAIN][FRESH_EVENTS] == set()
 
 
 def test_rank_changed_does_not_fire_on_cold_start(hass):

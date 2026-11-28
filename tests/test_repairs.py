@@ -1,13 +1,11 @@
-"""Tests for repairs.py -- the season_rollover fix flow.
+"""Tests for repairs.py -- season_rollover and phase_change fix flows.
 
-season_rollover is the only fixable repair issue this integration raises (see
-coordinator.py). The fix searches for the team again *inside the repair
-dialog* and switches the existing config entry over to the team's new IDs.
-An earlier version started the entry's reconfigure flow from here instead;
-Home Assistant doesn't list flows started that way, so the user clicked and
-nothing ever appeared. The end-to-end test at the bottom drives the flow
-through Home Assistant's own repairs manager, which is what decides what the
-user sees.
+Both `season_rollover` and `phase_change` open a menu offering to follow the
+team (proposing same-name club candidates first for phase_change, or searching
+inside the repair dialog) or ignore the alert, then switch the existing config
+entry over to the team's new IDs while keeping its entities and device.
+The end-to-end tests drive the flows through Home Assistant's own repairs
+manager, which is what decides what the user sees.
 """
 
 from __future__ import annotations
@@ -109,57 +107,41 @@ async def test_async_create_fix_flow_handles_missing_data(hass):
     assert flow._entry_id == ""
 
 
-# --- confirm ----------------------------------------------------------------
+# --- init & follow ----------------------------------------------------------
 
 
-async def test_fix_flow_shows_confirm_step_first_with_the_team_name(hass):
-    """The form texts use {team_name}; Home Assistant doesn't fill it in for a
-    custom repair flow, so the flow must pass it or users read the raw
-    placeholder."""
+async def test_init_closes_stale_issue_when_entry_was_removed(hass):
+    """Opening an orphan repair whose entry was removed closes it cleanly."""
+    result = await _flow(hass, "does-not-exist").async_step_init({"issue_id": "x"})
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
+async def test_follow_goes_straight_to_search_with_the_team_name(hass):
+    """Choosing 'follow' opens the search step directly with {team_name} filled
+    in, without forwarding the menu payload as a submitted search query."""
     entry = _make_entry(hass)
-
-    result = await _flow(hass, entry.entry_id).async_step_follow()
-
-    assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "confirm"
-    assert result["description_placeholders"] == {"team_name": "Basket Landes"}
-
-
-async def test_the_data_home_assistant_starts_the_flow_with_is_not_a_confirmation(hass):
-    """Home Assistant calls the first step with {"issue_id": ...} as user_input.
-    Forwarding it to the confirm step made it look like the user had already
-    confirmed, so the explanation was skipped."""
-    entry = _make_entry(hass)
+    hass.config_entries.flow.async_init = AsyncMock()
 
     result = await _flow(hass, entry.entry_id).async_step_follow({"issue_id": "x"})
 
     assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "confirm"
-
-
-async def test_confirming_goes_on_to_the_search_without_starting_another_flow(hass):
-    """The search happens in this dialog: starting a reconfigure flow in the
-    background is what made the old fix invisible."""
-    entry = _make_entry(hass)
-    hass.config_entries.flow.async_init = AsyncMock()
-
-    result = await _flow(hass, entry.entry_id).async_step_confirm(user_input={})
-
-    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "search"
+    assert result["errors"] == {}
+    assert result["description_placeholders"] == {"team_name": "Basket Landes"}
     hass.config_entries.flow.async_init.assert_not_awaited()
 
 
-async def test_confirming_with_removed_entry_does_not_crash(hass):
-    """If the integration entry was deleted before the user got here, there is
-    nothing left to fix: the repair just closes."""
-    result = await _flow(hass, "does-not-exist").async_step_confirm(user_input={})
+async def test_follow_with_removed_entry_closes_cleanly(hass):
+    """If the integration entry was deleted before the user clicked 'follow',
+    there is nothing left to fix: the repair just closes."""
+    result = await _flow(hass, "does-not-exist").async_step_follow()
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
 async def test_placeholders_are_empty_for_a_removed_entry(hass):
-    result = await _flow(hass, "does-not-exist").async_step_confirm()
+    result = await _flow(hass, "does-not-exist").async_step_search()
 
     assert result["description_placeholders"] == {"team_name": ""}
 
@@ -515,11 +497,8 @@ async def test_the_whole_repair_works_through_home_assistants_repairs_manager(ha
         result["flow_id"], {"next_step_id": "follow"}
     )
     assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "confirm"
-    assert result["description_placeholders"] == {"team_name": "Basket Landes"}
-
-    result = await manager.async_configure(result["flow_id"], {})
     assert result["step_id"] == "search"
+    assert result["description_placeholders"] == {"team_name": "Basket Landes"}
 
     with (
         patch(f"{CLIENT}.get_engagement", AsyncMock(return_value=ENGAGEMENT)),
@@ -619,7 +598,7 @@ async def test_same_team_under_a_new_pool_is_proposed(hass):
     "outcome",
     [[CURRENT, OTHER_TEAM], FFBBConnectionError("down"), FFBBApiError("boom")],
 )
-async def test_without_a_candidate_the_usual_explanation_comes_first(hass, outcome):
+async def test_without_a_candidate_the_search_comes_next(hass, outcome):
     entry = _make_entry(hass)
     mock = (
         AsyncMock(side_effect=outcome)
@@ -630,7 +609,7 @@ async def test_without_a_candidate_the_usual_explanation_comes_first(hass, outco
     with patch(f"{CLIENT}.get_club_engagements", mock):
         result = await _phase_flow(hass, entry.entry_id).async_step_follow()
 
-    assert result["step_id"] == "confirm"
+    assert result["step_id"] == "search"
 
 
 async def test_an_entry_without_a_club_is_not_looked_up(hass):
@@ -643,14 +622,13 @@ async def test_an_entry_without_a_club_is_not_looked_up(hass):
         result = await _phase_flow(hass, entry.entry_id).async_step_follow()
 
     lookup.assert_not_awaited()
-    assert result["step_id"] == "confirm"
+    assert result["step_id"] == "search"
 
 
-async def test_a_removed_entry_falls_back_to_the_plain_explanation(hass):
+async def test_a_removed_entry_closes_the_phase_change_repair(hass):
     result = await _phase_flow(hass, "does-not-exist").async_step_follow()
 
-    assert result["step_id"] == "confirm"
-    assert result["description_placeholders"] == {"team_name": ""}
+    assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
 async def test_choosing_the_proposed_team_switches_the_entry_over(hass):
@@ -873,7 +851,9 @@ def _issue_texts(name):
 
 
 @pytest.mark.parametrize("name", _TEXT_FILES)
-@pytest.mark.parametrize("key", ["phase_change", "season_rollover"])
+@pytest.mark.parametrize(
+    "key", ["phase_change", "season_rollover", "token_refresh_failing"]
+)
 def test_the_alert_title_names_the_team(name, key):
     """Several teams can be tracked: the title alone must tell which one."""
     assert "{team_name}" in _issue_texts(name)[key]["title"]

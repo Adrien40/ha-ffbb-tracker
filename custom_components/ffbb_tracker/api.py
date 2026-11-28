@@ -147,12 +147,14 @@ _POULE_FIELDS: Final = (
     "classements.idEngagement.id",
     "classements.idEngagement.nom",
     "classements.idEngagement.idOrganisme.code",
+    "classements.idEngagement.idOrganisme.logo",
     "classements.matchJoues",
     "classements.points",
     "classements.position",
     "classements.gagnes",
     "classements.perdus",
     "classements.nuls",
+    "classements.pointsInitiaux",
     "classements.nombreForfaits",
     "classements.nombreDefauts",
     "classements.penalitesArbitrage",
@@ -527,8 +529,8 @@ class FFBBClient:
         when a match result seems to be missing (the FFBB API once kept
         serving a poule snapshot that predated published scores for one
         request shape while answering correctly for another). Pass a value
-        that changes over time (e.g. the hour of the day) so successive
-        requests do not repeat the same shape.
+        that changes over time (e.g. a time bucket) so successive requests
+        do not repeat the same shape.
         """
         endpoint = f"items/ffbbserver_poules/{poule_id}"
         ordered_fields = list(_POULE_FIELDS)

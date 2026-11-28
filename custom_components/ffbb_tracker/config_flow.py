@@ -28,6 +28,7 @@ from .const import (
     CONF_LIVE_SCAN_INTERVAL,
     CONF_LIVE_WINDOW_AFTER_HOURS,
     CONF_PHASE_CHANGE_DAYS,
+    CONF_POULE_ID,
     CONF_SCAN_INTERVAL,
     DEFAULT_LIVE_POLLING,
     DEFAULT_LIVE_SCAN_INTERVAL,
@@ -44,6 +45,7 @@ from .const import (
     MIN_PHASE_CHANGE_DAYS,
     MIN_SCAN_INTERVAL,
 )
+from .coordinator import _engagement_id, str_or_empty
 from .team_picker import (
     MIN_SEARCH_QUERY_LENGTH,
     TeamChooser,
@@ -166,7 +168,7 @@ class FFBBTrackerConfigFlow(ConfigFlow, domain=DOMAIN):
         if self._chooser is None:
             # When reconfiguring, the teams closest to the current one come first.
             reference = (
-                str(self._reconfigure_entry.data.get(CONF_COMPETITION_NAME, ""))
+                str_or_empty(self._reconfigure_entry.data.get(CONF_COMPETITION_NAME))
                 if self._reconfigure_entry
                 else ""
             )
@@ -174,19 +176,21 @@ class FFBBTrackerConfigFlow(ConfigFlow, domain=DOMAIN):
         chooser = self._chooser
 
         if user_input is not None and not chooser.apply_filter(user_input):
-            engagement_id = str(user_input["engagement_id"])
+            engagement_id = str_or_empty(user_input.get("engagement_id"))
             selected_engagement = next(
                 (
                     eng
                     for eng in self._engagements
-                    if str(eng.get("id")) == engagement_id
+                    if str_or_empty(eng.get("id")) == engagement_id
                 ),
                 None,
             )
 
             if selected_engagement:
                 organisme_id = (
-                    str(self._selected_club.get("id")) if self._selected_club else ""
+                    str_or_empty(self._selected_club.get("id"))
+                    if self._selected_club
+                    else ""
                 )
                 data, title = build_entry(
                     selected_engagement, engagement_id, organisme_id
@@ -223,9 +227,8 @@ class FFBBTrackerConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors={"base": error or "unknown"},
             )
 
-        organisme = engagement.get("idOrganisme") or {}
         data, title = build_entry(
-            engagement, engagement_id, str(organisme.get("id", ""))
+            engagement, engagement_id, _engagement_id(engagement.get("idOrganisme"))
         )
         return await self._finalize_entry(engagement_id, data, title)
 
@@ -248,7 +251,12 @@ class FFBBTrackerConfigFlow(ConfigFlow, domain=DOMAIN):
             ):
                 return self.async_abort(reason="already_configured")
 
-            migrate_entities(self.hass, self._reconfigure_entry, engagement_id)
+            migrate_entities(
+                self.hass,
+                self._reconfigure_entry,
+                engagement_id,
+                new_poule_id=data[CONF_POULE_ID],
+            )
 
             return self.async_update_reload_and_abort(
                 self._reconfigure_entry,

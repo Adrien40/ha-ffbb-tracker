@@ -632,12 +632,14 @@ NORMAL_POULE_FIELDS = (
     "classements.idEngagement.id",
     "classements.idEngagement.nom",
     "classements.idEngagement.idOrganisme.code",
+    "classements.idEngagement.idOrganisme.logo",
     "classements.matchJoues",
     "classements.points",
     "classements.position",
     "classements.gagnes",
     "classements.perdus",
     "classements.nuls",
+    "classements.pointsInitiaux",
     "classements.nombreForfaits",
     "classements.nombreDefauts",
     "classements.penalitesArbitrage",
@@ -725,11 +727,11 @@ async def test_refresh_never_makes_the_standings_limit_unsafe():
 
 @pytest.mark.asyncio
 async def test_refresh_truncation_warning_uses_the_limit_actually_requested(caplog):
-    # refresh=1760 -> standings limit 60 (100 - 1760 // 44 % 50)
+    # refresh=1840 -> standings limit 60 (100 - 1840 // 46 % 50)
     data = {"id": "poule-1", "classements": [{"id": str(i)} for i in range(60)]}
 
     with caplog.at_level(logging.WARNING):
-        _, kwargs = await _poule_request(refresh=1760, data=data)
+        _, kwargs = await _poule_request(refresh=1840, data=data)
 
     assert kwargs["params"]["deep[classements][_limit]"] == 60
     assert "hit the API limit (60)" in caplog.text

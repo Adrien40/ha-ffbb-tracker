@@ -100,9 +100,10 @@ def _make_team_data(**overrides) -> FFBBTeamData:
 # ---------------------------------------------------------------------------
 
 
-def test_get_labels_returns_french_for_french_instance(hass):
-    """When hass.config.language is 'fr', French labels must be used."""
-    hass.config.language = "fr"
+@pytest.mark.parametrize("language", ["fr", "fr-FR", "fr_CA", "FR"])
+def test_get_labels_returns_french_for_french_instance(hass, language):
+    """French and regional French language tags must use French labels."""
+    hass.config.language = language
 
     labels = _get_labels(hass)
 
@@ -110,9 +111,10 @@ def test_get_labels_returns_french_for_french_instance(hass):
     assert labels["win"] == "victoire"
 
 
-def test_get_labels_defaults_to_english_for_other_languages(hass):
-    """An unsupported language code must fall back to English, not crash."""
-    hass.config.language = "de"
+@pytest.mark.parametrize("language", ["de", "en-GB", ""])
+def test_get_labels_defaults_to_english_for_other_languages(hass, language):
+    """An unsupported or blank language code must fall back to English."""
+    hass.config.language = language
 
     labels = _get_labels(hass)
 

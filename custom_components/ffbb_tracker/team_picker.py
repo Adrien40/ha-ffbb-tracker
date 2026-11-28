@@ -34,7 +34,16 @@ from .const import (
     CONF_POULE_ID,
     CONF_TEAM_NAME,
     DOMAIN,
+    FRESH_EVENTS,
     FRESH_RANK_EVOLUTION,
+)
+from .coordinator import (
+    _engagement_id,
+    as_dict,
+    delete_team_issues,
+    drop_unused_poule_cache,
+    forget_not_found,
+    str_or_empty,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -86,18 +95,21 @@ def may_be_club_search(query: str, error: str | None) -> bool:
 def club_options(clubs: list[dict[str, Any]]) -> dict[str, str]:
     """Return the club choices of the club step, keyed by club ID."""
     return {
-        str(club["id"]): f"{club.get('nom', 'Club')} ({club.get('code', 'N/A')})"
+        str_or_empty(club.get("id")): (
+            f"{str_or_empty(club.get('nom')) or 'Club'} "
+            f"({str_or_empty(club.get('code')) or 'N/A'})"
+        )
         for club in clubs
     }
 
 
 def team_label(engagement: dict[str, Any]) -> str:
     """Return the text a team is listed under: "team — competition (pool)"."""
-    team_name = engagement.get("nom") or "Équipe"
-    comp = engagement.get("idCompetition") or {}
-    comp_name = comp.get("nom") or "Compétition"
-    poule = engagement.get("idPoule") or {}
-    poule_name = poule.get("nom") or ""
+    team_name = str_or_empty(engagement.get("nom")) or "Équipe"
+    comp = as_dict(engagement.get("idCompetition"))
+    comp_name = str_or_empty(comp.get("nom")) or "Compétition"
+    poule = as_dict(engagement.get("idPoule"))
+    poule_name = str_or_empty(poule.get("nom"))
     label = f"{team_name} — {comp_name}"
     if poule_name:
         label += f" ({poule_name})"
@@ -106,7 +118,7 @@ def team_label(engagement: dict[str, Any]) -> str:
 
 def team_options(engagements: list[dict[str, Any]]) -> dict[str, str]:
     """Return the choices of the team step, keyed by engagement ID."""
-    return {str(eng["id"]): team_label(eng) for eng in engagements}
+    return {str_or_empty(eng.get("id")): team_label(eng) for eng in engagements}
 
 
 def _fold(text: str) -> str:
@@ -132,8 +144,8 @@ def _words(text: str) -> set[str]:
 
 def competition_score(engagement: dict[str, Any], reference_competition: str) -> int:
     """Return how many words a team's competition shares with the reference."""
-    comp = engagement.get("idCompetition") or {}
-    return len(_words(reference_competition) & _words(str(comp.get("nom") or "")))
+    comp = as_dict(engagement.get("idCompetition"))
+    return len(_words(reference_competition) & _words(str_or_empty(comp.get("nom"))))
 
 
 def sort_teams(
@@ -228,8 +240,12 @@ class TeamChooser:
             ] = str
         teams = self.teams
         default: Any = vol.UNDEFINED
-        if teams and (default_first or self._ranked or self.team_filter):
-            default = str(teams[0]["id"])
+        if (
+            teams
+            and not self.errors
+            and (default_first or self._ranked or self.team_filter)
+        ):
+            default = str_or_empty(teams[0].get("id"))
         fields[vol.Required("engagement_id", default=default)] = vol.In(
             team_options(teams)
         )
@@ -240,15 +256,14 @@ def build_entry(
     engagement: dict[str, Any], engagement_id: str, organisme_id: str
 ) -> tuple[dict[str, Any], str]:
     """Return the config entry data and title for a selected engagement."""
-    team_name = engagement.get("nom") or "Équipe"
-    competition = engagement.get("idCompetition") or {}
-    competition_name = competition.get("nom") or "Compétition"
-    poule = engagement.get("idPoule") or {}
+    team_name = str_or_empty(engagement.get("nom")) or "Équipe"
+    competition = as_dict(engagement.get("idCompetition"))
+    competition_name = str_or_empty(competition.get("nom")) or "Compétition"
     data = {
         CONF_ENGAGEMENT_ID: engagement_id,
         CONF_TEAM_NAME: team_name,
         CONF_COMPETITION_NAME: competition_name,
-        CONF_POULE_ID: str(poule.get("id")),
+        CONF_POULE_ID: _engagement_id(engagement.get("idPoule")),
         CONF_ORGANISME_ID: organisme_id,
     }
     return data, f"{team_name} - {competition_name}"
@@ -291,7 +306,9 @@ async def club_teams(
         _LOGGER.error("Error retrieving club engagements: %s", err)
         return [], "unknown"
     valid = [
-        eng for eng in engagements if eng.get("idPoule") and eng["idPoule"].get("id")
+        eng
+        for eng in engagements
+        if isinstance(eng, dict) and _engagement_id(eng.get("idPoule"))
     ]
     if not valid:
         return [], "no_teams_found"
@@ -311,13 +328,16 @@ async def lookup_engagement(
     except FFBBApiError as err:
         _LOGGER.error("Direct engagement retrieval error: %s", err)
         return None, "unknown"
-    if not (engagement.get("idPoule") or {}).get("id"):
+    if not _engagement_id(engagement.get("idPoule")):
         return None, "no_poule_found"
     return engagement, None
 
 
 def migrate_entities(
-    hass: HomeAssistant, entry: ConfigEntry, new_engagement_id: str
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    new_engagement_id: str,
+    new_poule_id: str | None = None,
 ) -> None:
     """Make the entry's entities and device follow the team to a new engagement.
 
@@ -335,8 +355,20 @@ def migrate_entities(
     If a device for the new engagement already exists, nothing is moved onto it
     (see below) and the entry's entities are recreated as before.
     """
-    old_engagement_id = str(entry.data.get(CONF_ENGAGEMENT_ID, ""))
-    if old_engagement_id and old_engagement_id != new_engagement_id:
+    old_engagement_id = str_or_empty(entry.data.get(CONF_ENGAGEMENT_ID))
+    old_poule_id = str_or_empty(entry.data.get(CONF_POULE_ID))
+    team_changed = bool(old_engagement_id and old_engagement_id != new_engagement_id)
+    pool_changed = bool(
+        old_poule_id and new_poule_id is not None and old_poule_id != new_poule_id
+    )
+
+    if team_changed or pool_changed:
+        forget_not_found(hass, old_engagement_id, old_poule_id)
+        delete_team_issues(hass, old_engagement_id)
+    if pool_changed:
+        drop_unused_poule_cache(hass, old_poule_id, exclude_entry_id=entry.entry_id)
+
+    if team_changed:
         if _team_device_exists(hass, new_engagement_id):
             # Home Assistant doesn't refuse two devices with the same
             # identifiers, it silently lets them coexist -- and entities can
@@ -350,7 +382,32 @@ def migrate_entities(
         else:
             _migrate_entity_ids(hass, entry, old_engagement_id, new_engagement_id)
             _migrate_device(hass, entry, old_engagement_id, new_engagement_id)
+    elif pool_changed:
+        _flag_pool_bound_entities(hass, entry, new_engagement_id)
     remove_stale_devices(hass, entry, new_engagement_id)
+
+
+def _flag_fresh_key(hass: HomeAssistant, key: str, unique_id: str) -> None:
+    """Mark a pool-bound entity so its old pool's state is not restored."""
+    if key == "rank_evolution":
+        hass.data.setdefault(DOMAIN, {}).setdefault(FRESH_RANK_EVOLUTION, set()).add(
+            unique_id
+        )
+    elif key in ("match_finished", "rank_changed"):
+        hass.data.setdefault(DOMAIN, {}).setdefault(FRESH_EVENTS, set()).add(unique_id)
+
+
+def _flag_pool_bound_entities(
+    hass: HomeAssistant, entry: ConfigEntry, engagement_id: str
+) -> None:
+    """Reset pool-bound entities when the team moves to a new pool under the same ID."""
+    registry = er.async_get(hass)
+    prefix = f"{engagement_id}_"
+    for entity in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if entity.unique_id.startswith(prefix):
+            _flag_fresh_key(
+                hass, entity.unique_id.removeprefix(prefix), entity.unique_id
+            )
 
 
 def _team_device_exists(hass: HomeAssistant, engagement_id: str) -> bool:
@@ -392,11 +449,7 @@ def _migrate_entity_ids(
                 err,
             )
             continue
-        if key == "rank_evolution":
-            # Its restored positions belong to the old team's pool.
-            hass.data.setdefault(DOMAIN, {}).setdefault(
-                FRESH_RANK_EVOLUTION, set()
-            ).add(new_unique_id)
+        _flag_fresh_key(hass, key, new_unique_id)
 
 
 def _migrate_device(

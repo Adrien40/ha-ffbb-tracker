@@ -1060,3 +1060,42 @@ def test_the_full_pack_is_named_like_the_other_telegram_blueprints():
     name = _load("match_notifications_telegram.yaml")["blueprint"]["name"]
 
     assert name == "FFBB Tracker - Notifications (Telegram)"
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "match_result_notification_telegram.yaml",
+        "rank_changed_notification_telegram.yaml",
+    ],
+)
+def test_result_and_rank_blueprints_queue_runs_instead_of_restarting(filename):
+    """`mode: queued` prevents a filtered result/rank event arriving mid-delay
+    from cancelling an in-flight manual 'Actualiser' callback."""
+    assert _load(filename)["mode"] == "queued"
+
+
+async def test_result_discovery_is_not_tricked_by_club_names_containing_last_or_equipe(
+    paris,
+):
+    """A club/team slug containing 'last' and 'equipe' (e.g. Sainte-Scolastique
+    Équipe 1) must never make prochain_match_* overwrite the last-match sensors."""
+    ids = _register_team(paris, "sainte_scolastique_equipe_1")
+    _set_last_match_sensors(paris, ids)
+    paris.states.async_set(
+        ids["prochain_match_date"],
+        "2026-02-07T19:00:00+00:00",
+        {
+            "round": "6",
+            "gym_name": "Salle Prochain",
+            "result_grace_hours": 3,
+        },
+    )
+    paris.states.async_set(ids["fin_de_match"], "unknown", {})
+
+    rendered = await _result_message(paris, ids, {"id": "callback_refresh"})
+
+    assert "Salle Dernier" in rendered
+    assert "Salle Prochain" not in rendered
+    assert "New Club" in rendered
+    assert "Journée 5" in rendered

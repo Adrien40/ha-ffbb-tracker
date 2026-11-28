@@ -21,6 +21,8 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import issue_registry as ir
+from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ffbb_tracker.const import (
@@ -30,6 +32,7 @@ from custom_components.ffbb_tracker.const import (
     CONF_POULE_ID,
     CONF_TEAM_NAME,
     DOMAIN,
+    FRESH_EVENTS,
     FRESH_RANK_EVOLUTION,
 )
 from custom_components.ffbb_tracker.repairs import SeasonRolloverRepairFlow
@@ -385,3 +388,52 @@ async def test_an_entry_without_a_stored_engagement_is_left_alone(hass):
     entry.add_to_hass(hass)
 
     migrate_entities(hass, entry, NEW_ID)
+
+
+async def test_switching_team_cleans_up_issues_not_found_and_old_poule_cache(hass, api):
+    """Switching a team clears old repair issues, 404 streak and unused cache."""
+    entry = await _start(hass)
+    assert "poule-1" in hass.data[DOMAIN]["_poule_cache"]
+    hass.data[DOMAIN]["_not_found_since"] = {f"{OLD_ID}:poule-1": dt_util.utcnow()}
+    for prefix in ("season_rollover", "phase_change", "token_refresh_failing"):
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            f"{prefix}_{OLD_ID}",
+            is_fixable=prefix != "token_refresh_failing",
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=prefix,
+            translation_placeholders={"team_name": TEAM},
+        )
+
+    migrate_entities(hass, entry, NEW_ID, new_poule_id="poule-2")
+
+    assert "poule-1" not in hass.data[DOMAIN]["_poule_cache"]
+    assert f"{OLD_ID}:poule-1" not in hass.data[DOMAIN]["_not_found_since"]
+    for prefix in ("season_rollover", "phase_change", "token_refresh_failing"):
+        assert ir.async_get(hass).async_get_issue(DOMAIN, f"{prefix}_{OLD_ID}") is None
+    assert hass.data[DOMAIN][FRESH_EVENTS] == {
+        f"{NEW_ID}_match_finished",
+        f"{NEW_ID}_rank_changed",
+    }
+
+
+async def test_same_engagement_moving_to_new_pool_resets_pool_bound_entities(hass):
+    """Phase 2 under the same engagement ID still resets rank evolution & events."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=OLD_ID,
+        data={CONF_ENGAGEMENT_ID: OLD_ID, CONF_POULE_ID: "poule-1"},
+    )
+    entry.add_to_hass(hass)
+    hass.data.setdefault(DOMAIN, {})["_poule_cache"] = {"poule-1": object()}
+    _add_entity(hass, entry, f"{OLD_ID}_rank")
+    _add_entity(hass, entry, f"{OLD_ID}_rank_evolution")
+    _add_entity(hass, entry, f"{OLD_ID}_match_finished")
+    _add_entity(hass, entry, "unrelated_unique_id")
+
+    migrate_entities(hass, entry, OLD_ID, new_poule_id="poule-2")
+
+    assert "poule-1" not in hass.data[DOMAIN]["_poule_cache"]
+    assert hass.data[DOMAIN][FRESH_RANK_EVOLUTION] == {f"{OLD_ID}_rank_evolution"}
+    assert hass.data[DOMAIN][FRESH_EVENTS] == {f"{OLD_ID}_match_finished"}

@@ -125,10 +125,11 @@ ATTR_NAVIGATION_URL: Final = "navigation_url"
 ATTR_GOOGLE_MAPS_URL: Final = "google_maps_url"
 ATTR_WAZE_URL: Final = "waze_url"
 
-# Key in hass.data[DOMAIN] holding the unique IDs of rank evolution sensors that
-# must not restore their last positions: their entity was just moved to another
-# team (see team_picker.migrate_entities).
+# Keys in hass.data[DOMAIN] holding the unique IDs of entities that must not
+# restore their previous state: they were just moved to another team or pool
+# (see team_picker.migrate_entities).
 FRESH_RANK_EVOLUTION: Final = "_fresh_rank_evolution"
+FRESH_EVENTS: Final = "_fresh_events"
 
 # Attribution shown on every entity.
 ATTRIBUTION: Final = "Données fournies par competitions.ffbb.com"

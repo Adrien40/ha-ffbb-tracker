@@ -185,6 +185,10 @@ async def test_get_next_matches_returns_only_unplayed_fixtures(hass):
         "US Mont-de-Marsan",
         "US Mont-de-Marsan",
     ]
+    assert matches[0]["postal_code"] == "40000"
+    assert matches[0]["formatted_address"] == (
+        "Gymnase Andre Chavanne, 1 rue du Stade, 40000, Mont-de-Marsan"
+    )
     assert len(matches) == 2
 
 

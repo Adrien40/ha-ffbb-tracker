@@ -7,6 +7,9 @@ blueprint:
   input:
     next_match_date_sensor:
       name: Capteur Date du prochain match
+      description: >-
+        Choisir le capteur se terminant par "_next_match_date" (traduit
+        "Prochain match : Date"). Ne pas choisir "Dernier match : Date".
       selector:
         entity:
           filter:
@@ -15,6 +18,9 @@ blueprint:
             device_class: timestamp
     next_match_opponent_sensor:
       name: Capteur Adversaire du prochain match
+      description: >-
+        Choisir le capteur se terminant par "_next_match_opponent" (traduit
+        "Prochain match : Adversaire"). Ne pas choisir "Dernier match : Adversaire".
       selector:
         entity:
           filter:
@@ -22,6 +28,9 @@ blueprint:
             domain: sensor
     next_match_location_sensor:
       name: Capteur Lieu du prochain match
+      description: >-
+        Choisir le capteur se terminant par "_next_match_location" (traduit
+        "Prochain match : Lieu").
       selector:
         entity:
           filter:
@@ -29,6 +38,9 @@ blueprint:
             domain: sensor
     refresh_button:
       name: Bouton d'actualisation FFBB
+      description: >-
+        Le bouton "Actualiser" de la même équipe FFBB Tracker, pressé
+        automatiquement au clic sur le bouton Telegram.
       selector:
         entity:
           filter:

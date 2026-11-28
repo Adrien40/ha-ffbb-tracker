@@ -199,13 +199,9 @@
               "ignore": "Ignorer cette alerte"
             }
           },
-          "confirm": {
-            "title": "Retrouver « {team_name} »",
-            "description": "L'équipe « {team_name} » est introuvable sur l'API FFBB depuis plusieurs jours. Cela arrive généralement en début de nouvelle saison, quand la FFBB réattribue les identifiants d'engagement et de poule. Les étapes suivantes recherchent « {team_name} » à nouveau pour la suivre sous ses nouveaux identifiants. Ses entités existantes sont conservées, avec leurs identifiants, noms et historique, donc vos automatisations et tableaux de bord continuent de fonctionner."
-          },
           "search": {
             "title": "Rechercher « {team_name} »",
-            "description": "Entrez un nom de club, une ville, l'URL ou l'identifiant d'une équipe pour retrouver « {team_name} » cette saison.",
+            "description": "Entrez un nom de club, une ville, l'URL ou l'identifiant d'une équipe pour retrouver « {team_name} » sous ses nouveaux identifiants. Ses entités existantes sont conservées, avec leurs identifiants, noms et historique, donc vos automatisations et tableaux de bord continuent de fonctionner.",
             "data": {
               "search_query": "Club, ville, URL ou ID d'équipe"
             }
@@ -249,7 +245,7 @@
       }
     },
     "token_refresh_failing": {
-      "title": "FFBB Tracker : Échec du renouvellement du jeton public",
+      "title": "FFBB Tracker : échec du renouvellement du jeton public pour « {team_name} »",
       "description": "Les mises à jour pour « {team_name} » continuent de fonctionner grâce à un jeton de secours, mais le renouvellement automatique du jeton public de l'API FFBB a échoué plusieurs fois de suite. Cela peut signifier que la FFBB a modifié son API `competitions.ffbb.com` et que cette intégration devra être mise à jour. Vérifiez qu'une nouvelle version n'est pas disponible, ou ouvrez une issue sur GitHub si le problème persiste."
     },
     "phase_change": {
@@ -276,13 +272,9 @@
               "team_filter": "Saisissez une partie du nom d'une équipe, d'une catégorie ou d'une compétition (ex. U13) puis validez pour réduire la liste. Validez à nouveau pour confirmer l'équipe choisie."
             }
           },
-          "confirm": {
-            "title": "Retrouver « {team_name} »",
-            "description": "L'équipe « {team_name} » n'a plus de match à jouer. Cela arrive généralement à la fin d'une phase, quand l'équipe continue dans une nouvelle poule. Les étapes suivantes recherchent « {team_name} » à nouveau pour la suivre dans sa nouvelle poule. Ses entités existantes sont conservées, avec leurs identifiants, noms et historique, donc vos automatisations et tableaux de bord continuent de fonctionner."
-          },
           "search": {
             "title": "Rechercher « {team_name} »",
-            "description": "Entrez un nom de club, une ville, l'URL ou l'identifiant d'une équipe pour retrouver « {team_name} » cette saison.",
+            "description": "Entrez un nom de club, une ville, l'URL ou l'identifiant d'une équipe pour retrouver « {team_name} » dans sa nouvelle poule. Ses entités existantes sont conservées, avec leurs identifiants, noms et historique, donc vos automatisations et tableaux de bord continuent de fonctionner.",
             "data": {
               "search_query": "Club, ville, URL ou ID d'équipe"
             }

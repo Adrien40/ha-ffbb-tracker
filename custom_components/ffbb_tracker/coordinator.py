@@ -7,6 +7,7 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Final
+from zoneinfo import ZoneInfo
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -49,6 +50,8 @@ from .const import (
 # shortest wake-up allowed (see FFBBDataUpdateCoordinator._compute_update_interval).
 _LIVE_BOUNDARY_MARGIN = timedelta(seconds=5)
 _MIN_BOUNDARY_WAKE_UP = timedelta(seconds=30)
+_RECHECK_BUCKET_SECONDS: Final = STALE_RECHECK_EARLY_INTERVAL_MINUTES * 60
+_FFBB_TIME_ZONE: Final = ZoneInfo("Europe/Paris")
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,7 +69,7 @@ _NOT_FOUND_SAVE_DELAY: Final = 1.0
 
 def _safe_int(value: Any) -> int | None:
     """Safely convert a value to int or return None."""
-    if value is None or value == "":
+    if value is None or value == "" or isinstance(value, bool):
         return None
     try:
         return int(value)
@@ -74,15 +77,48 @@ def _safe_int(value: Any) -> int | None:
     # requires-python) allows a bare comma-separated except list as long as
     # there's no `as` clause. Not a Python 2 leftover -- don't "fix" this
     # back to `except (ValueError, TypeError):`.
-    except ValueError, TypeError:
+    except ValueError, TypeError, OverflowError:
         return None
 
 
+def str_or_empty(value: Any) -> str:
+    """Turn a JSON value into a string, mapping None to an empty string."""
+    return "" if value is None else str(value)
+
+
+def as_dict(value: Any) -> dict[str, Any]:
+    """Return value when it is a dict, and an empty dict otherwise."""
+    result: dict[str, Any] = value if isinstance(value, dict) else {}
+    return result
+
+
+def _opt_str(value: Any) -> str | None:
+    """Turn a scalar JSON value into a non-empty string, or None."""
+    if value is None or isinstance(value, (bool, dict, list)):
+        return None
+    text = str(value)
+    return text if text else None
+
+
+def _parse_ffbb_datetime(raw_date: Any) -> datetime | None:
+    """Parse an ISO match datetime into UTC, assuming Europe/Paris when naive."""
+    if not isinstance(raw_date, str) or not raw_date:
+        return None
+    parsed = dt_util.parse_datetime(raw_date)
+    if parsed is None:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=_FFBB_TIME_ZONE)
+    return parsed.astimezone(UTC)
+
+
 def _engagement_id(raw: Any) -> str:
-    """Return the engagement id of a raw `idEngagementEquipeN` value."""
+    """Return the id of a raw Directus relation (nested dict or scalar id)."""
     if isinstance(raw, dict):
-        return str(raw.get("id", ""))
-    return str(raw or "")
+        return str_or_empty(raw.get("id"))
+    if isinstance(raw, (bool, list)):
+        return ""
+    return str_or_empty(raw)
 
 
 def _is_played(match: dict[str, Any]) -> bool:
@@ -160,12 +196,14 @@ class _PouleCacheEntry:
         "failure_seq",
         "failure_type",
         "fetched_at",
+        "last_recheck_at",
         "lock",
     )
 
     def __init__(self) -> None:
         self.data: dict[str, Any] | None = None
         self.fetched_at: datetime | None = None
+        self.last_recheck_at: datetime | None = None
         self.lock = asyncio.Lock()
         # The last failed fetch. `failure_seq` counts failures so that a team
         # that was queued behind a fetch that then failed can share that
@@ -216,18 +254,19 @@ async def _async_load_not_found(hass: HomeAssistant) -> None:
     outcome is that the delay starts over.
     """
     domain_data: dict[str, Any] = hass.data.setdefault(DOMAIN, {})
-    if domain_data.get("_not_found_loaded"):
-        return
-    domain_data["_not_found_loaded"] = True
-
-    saved = await _not_found_store(hass).async_load()
-    streaks: dict[str, datetime] = domain_data.setdefault("_not_found_since", {})
-    if not isinstance(saved, dict):
-        return
-    for key, raw in saved.items():
-        since = dt_util.parse_datetime(raw) if isinstance(raw, str) else None
-        if since is not None:
-            streaks.setdefault(key, since)
+    lock: asyncio.Lock = domain_data.setdefault("_not_found_lock", asyncio.Lock())
+    async with lock:
+        if domain_data.get("_not_found_loaded"):
+            return
+        saved = await _not_found_store(hass).async_load()
+        domain_data["_not_found_loaded"] = True
+        streaks: dict[str, datetime] = domain_data.setdefault("_not_found_since", {})
+        if not isinstance(saved, dict):
+            return
+        for key, raw in saved.items():
+            since = dt_util.parse_datetime(raw) if isinstance(raw, str) else None
+            if since is not None:
+                streaks.setdefault(key, since)
 
 
 def forget_not_found(hass: HomeAssistant, engagement_id: str, poule_id: str) -> None:
@@ -238,6 +277,29 @@ def forget_not_found(hass: HomeAssistant, engagement_id: str, poule_id: str) -> 
     _not_found_store(hass).async_delay_save(
         lambda: _serialize_not_found(streaks), _NOT_FOUND_SAVE_DELAY
     )
+
+
+def delete_team_issues(hass: HomeAssistant, engagement_id: str) -> None:
+    """Remove every repair issue raised for an engagement ID."""
+    for prefix in ("season_rollover", "phase_change", "token_refresh_failing"):
+        ir.async_delete_issue(hass, DOMAIN, f"{prefix}_{engagement_id}")
+
+
+def drop_unused_poule_cache(
+    hass: HomeAssistant, poule_id: str, *, exclude_entry_id: str
+) -> None:
+    """Forget the cached poule payload once no loaded team needs it."""
+    still_used = any(
+        str_or_empty(other.data.get(CONF_POULE_ID)) == poule_id
+        for other in hass.config_entries.async_loaded_entries(DOMAIN)
+        if other.entry_id != exclude_entry_id
+    )
+    if still_used:
+        return
+
+    poule_caches = hass.data.get(DOMAIN, {}).get("_poule_cache")
+    if isinstance(poule_caches, dict):
+        poule_caches.pop(poule_id, None)
 
 
 @dataclass
@@ -265,6 +327,7 @@ class MatchDetails:
     raw: dict[str, Any]
     team_url: str | None = None
     opponent_url: str | None = None
+    opponent_engagement_id: str = ""
     is_stale: bool = False
     is_exempt: bool = False
 
@@ -272,16 +335,29 @@ class MatchDetails:
     def formatted_address(self) -> str | None:
         """Return the gym's full address as a single formatted string, or None."""
         parts = [
-            part
+            text
             for part in (
                 self.gym_name,
                 self.gym_address,
                 self.gym_postal_code,
                 self.gym_city,
             )
-            if part
+            if (text := _opt_str(part))
         ]
         return ", ".join(parts) if parts else None
+
+
+def _fixture_sort_key(item: MatchDetails) -> tuple[datetime, int]:
+    """Order fixtures chronologically without letting undated forfeits stick last."""
+    round_num = _safe_int(item.round_number) or 0
+    if item.match_date is not None:
+        return (item.match_date, round_num)
+    fallback = (
+        datetime.min.replace(tzinfo=UTC)
+        if item.is_played
+        else datetime.max.replace(tzinfo=UTC)
+    )
+    return (fallback, round_num)
 
 
 @dataclass
@@ -408,14 +484,18 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
         """Fetch fixtures and standings from the FFBB API."""
         try:
             poule_data = await self._async_fetch_poule_data()
-        except FFBBNotFoundError as err:
-            self._handle_not_found()
-            raise UpdateFailed(
-                f"Pool or team not found on the FFBB API: {err}"
-            ) from err
-        except FFBBConnectionError as err:
-            raise UpdateFailed(f"Network error connecting to FFBB API: {err}") from err
         except FFBBApiError as err:
+            self._check_token_refresh_health()
+            self.update_interval = timedelta(minutes=self._base_interval_minutes)
+            if isinstance(err, FFBBNotFoundError):
+                self._handle_not_found()
+                raise UpdateFailed(
+                    f"Pool or team not found on the FFBB API: {err}"
+                ) from err
+            if isinstance(err, FFBBConnectionError):
+                raise UpdateFailed(
+                    f"Network error connecting to FFBB API: {err}"
+                ) from err
             raise UpdateFailed(f"Error communicating with FFBB API: {err}") from err
 
         self._clear_not_found_issue()
@@ -473,10 +553,7 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
                 is_fixable=True,
                 severity=ir.IssueSeverity.WARNING,
                 translation_key="phase_change",
-                translation_placeholders={
-                    "team_name": self.team_name,
-                    "days": str(self._phase_change_after.days),
-                },
+                translation_placeholders={"team_name": self.team_name},
                 data={"entry_id": self.config_entry.entry_id},
             )
         else:
@@ -591,6 +668,8 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             ):
                 data = await self._async_fetch_fresh_poule(cache, now, failures_before)
 
+            data = await self._async_recheck_missing_results(data, cache)
+            cache.data = data
             self.pending_results = [
                 self._summarize_pending(match, age)
                 for match, age in self._find_pending_results(data)
@@ -623,9 +702,9 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
 
         cache.failure_type = None
         self.last_api_fetch_at = now
-        cache.data = await self._async_recheck_missing_results(data)
+        cache.data = data
         cache.fetched_at = now
-        return cache.data
+        return data
 
     def _find_pending_results(
         self, data: dict[str, Any], min_age: timedelta | None = None
@@ -653,16 +732,15 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
                 continue
             # A bye round has no opposing team: there is no result to wait for.
             if eq1_id == self.engagement_id:
-                opponent_id, opponent_name = eq2_id, match.get("nomEquipe2")
+                opponent_id, opponent_name = eq2_id, _opt_str(match.get("nomEquipe2"))
             else:
-                opponent_id, opponent_name = eq1_id, match.get("nomEquipe1")
+                opponent_id, opponent_name = eq1_id, _opt_str(match.get("nomEquipe1"))
             if not opponent_id and not opponent_name:
                 continue
-            raw_date = match.get("date_rencontre")
-            parsed = dt_util.parse_datetime(raw_date) if raw_date else None
-            if parsed is None:
+            match_dt = _parse_ffbb_datetime(match.get("date_rencontre"))
+            if match_dt is None:
                 continue
-            age = now - dt_util.as_utc(parsed)
+            age = now - match_dt
             if min_age <= age <= max_age:
                 pending.append((match, age))
         return pending
@@ -671,8 +749,8 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
     def _summarize_pending(match: dict[str, Any], age: timedelta) -> dict[str, Any]:
         """Describe a match still lacking a result, for the diagnostics."""
         return {
-            "match_number": str(match.get("numero", "")),
-            "round": str(match.get("numeroJournee", "")),
+            "match_number": str_or_empty(match.get("numero")),
+            "round": str_or_empty(match.get("numeroJournee")),
             "date": match.get("date_rencontre"),
             "age_hours": round(age.total_seconds() / 3600, 1),
             "joue": match.get("joue"),
@@ -681,7 +759,7 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
         }
 
     async def _async_recheck_missing_results(
-        self, data: dict[str, Any]
+        self, data: dict[str, Any], cache: _PouleCacheEntry | None = None
     ) -> dict[str, Any]:
         """Check, with a differently formulated request, that results are not missing.
 
@@ -699,9 +777,8 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
         """
         # A match that has just finished is checked early and often (see
         # STALE_RECHECK_EARLY_* in const.py); an older one, hourly.
-        pending = self._find_pending_results(
-            data, min_age=timedelta(minutes=STALE_RECHECK_EARLY_MIN_AGE_MINUTES)
-        )
+        early_min_age = timedelta(minutes=STALE_RECHECK_EARLY_MIN_AGE_MINUTES)
+        pending = self._find_pending_results(data, min_age=early_min_age)
         if not pending:
             return data
 
@@ -713,14 +790,25 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
         )
 
         now = dt_util.utcnow()
-        if self.last_recheck_at is not None and now - self.last_recheck_at < interval:
+        poule_cache = cache or _get_poule_cache(self.hass, self.poule_id)
+        last_recheck = max(
+            (
+                ts
+                for ts in (self.last_recheck_at, poule_cache.last_recheck_at)
+                if ts is not None
+            ),
+            default=None,
+        )
+        if last_recheck is not None and now - last_recheck < interval:
             return data
 
         self.last_recheck_at = now
+        poule_cache.last_recheck_at = now
         self.stale_recheck_attempts += 1
         try:
             fresher = await self.client.get_poule_data(
-                self.poule_id, refresh=int(now.timestamp() // 3600)
+                self.poule_id,
+                refresh=max(1, int(now.timestamp() // _RECHECK_BUCKET_SECONDS)),
             )
         except FFBBApiError as err:
             self.last_recheck_outcome = "failed"
@@ -732,15 +820,23 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             return data
 
         gained = _count_results(fresher) - _count_results(data)
-        if gained > 0:
+        resolved_pending = len(pending) - len(
+            self._find_pending_results(fresher, min_age=early_min_age)
+        )
+        if gained > 0 or resolved_pending > 0:
             self.stale_responses_detected += 1
-            self.last_recheck_outcome = f"fresher_response_used (+{gained} result(s))"
+            detail = (
+                f"+{gained} result(s)"
+                if gained > 0
+                else f"{resolved_pending} rescheduled/cleared"
+            )
+            self.last_recheck_outcome = f"fresher_response_used ({detail})"
             _LOGGER.info(
-                "The FFBB API returned an outdated response for pool %s (%d "
-                "result(s) missing); a differently formulated request returned "
-                "the up-to-date data and is used instead",
+                "The FFBB API returned an outdated response for pool %s (%s); "
+                "a differently formulated request returned the up-to-date data "
+                "and is used instead",
                 self.poule_id,
-                gained,
+                detail,
             )
             return fresher
 
@@ -890,7 +986,7 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
 
     def _process_poule_data(self, data: dict[str, Any]) -> FFBBTeamData:
         """Parse matches and standings for the tracked team."""
-        poule_name = data.get("nom") or ""
+        poule_name = _opt_str(data.get("nom")) or ""
         # Anything that is not a list of objects is dropped rather than left to
         # crash the whole refresh on a single malformed entry.
         raw_matches = _dict_items(data.get("rencontres"))
@@ -908,10 +1004,7 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
         for match in raw_matches:
             raw_org1 = match.get("idOrganismeEquipe1")
             if isinstance(raw_org1, dict):
-                eng1 = match.get("idEngagementEquipe1")
-                eng1_id = str(
-                    eng1.get("id", "") if isinstance(eng1, dict) else eng1 or ""
-                )
+                eng1_id = _engagement_id(match.get("idEngagementEquipe1"))
                 if eng1_id and raw_org1.get("code"):
                     engagement_to_code[eng1_id] = str(raw_org1["code"])
                 if eng1_id and raw_org1.get("logo"):
@@ -919,10 +1012,7 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
 
             raw_org2 = match.get("idOrganismeEquipe2")
             if isinstance(raw_org2, dict):
-                eng2 = match.get("idEngagementEquipe2")
-                eng2_id = str(
-                    eng2.get("id", "") if isinstance(eng2, dict) else eng2 or ""
-                )
+                eng2_id = _engagement_id(match.get("idEngagementEquipe2"))
                 if eng2_id and raw_org2.get("code"):
                     engagement_to_code[eng2_id] = str(raw_org2["code"])
                 if eng2_id and raw_org2.get("logo"):
@@ -930,19 +1020,8 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
 
         team_matches: list[MatchDetails] = []
         for match in raw_matches:
-            eq1_engagement = match.get("idEngagementEquipe1")
-            eq2_engagement = match.get("idEngagementEquipe2")
-
-            eq1_id = (
-                str(eq1_engagement.get("id", ""))
-                if isinstance(eq1_engagement, dict)
-                else str(eq1_engagement or "")
-            )
-            eq2_id = (
-                str(eq2_engagement.get("id", ""))
-                if isinstance(eq2_engagement, dict)
-                else str(eq2_engagement or "")
-            )
+            eq1_id = _engagement_id(match.get("idEngagementEquipe1"))
+            eq2_id = _engagement_id(match.get("idEngagementEquipe2"))
 
             if self.engagement_id not in (eq1_id, eq2_id):
                 continue
@@ -952,9 +1031,7 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             )
             team_matches.append(parsed_match)
 
-        team_matches.sort(
-            key=lambda item: item.match_date or datetime.max.replace(tzinfo=UTC)
-        )
+        team_matches.sort(key=_fixture_sort_key)
 
         now = dt_util.utcnow()
         last_match: MatchDetails | None = None
@@ -1008,22 +1085,26 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             club_code: str | None = None
             club_logo_id: str | None = None
             if isinstance(raw_engagement, dict):
-                row_engagement_id = str(raw_engagement.get("id", ""))
-                team_label = raw_engagement.get("nom") or row.get("nomEquipe", "N/A")
+                row_engagement_id = str_or_empty(raw_engagement.get("id"))
+                team_label = (
+                    _opt_str(raw_engagement.get("nom"))
+                    or _opt_str(row.get("nomEquipe"))
+                    or "N/A"
+                )
                 raw_org = raw_engagement.get("idOrganisme")
                 if isinstance(raw_org, dict) and raw_org.get("code"):
                     club_code = str(raw_org["code"])
                 if isinstance(raw_org, dict) and raw_org.get("logo"):
                     club_logo_id = str(raw_org["logo"])
             elif raw_engagement is not None:
-                row_engagement_id = str(raw_engagement)
-                team_label = row.get("nomEquipe", "N/A")
+                row_engagement_id = _engagement_id(raw_engagement)
+                team_label = _opt_str(row.get("nomEquipe")) or "N/A"
             else:
                 # No engagement at all: this is the bye line ("EXEMPT") of a
                 # pool with an odd number of teams, named like the bye
                 # rounds of the calendar rather than "N/A".
                 row_engagement_id = ""
-                team_label = row.get("nomEquipe") or "Exempt"
+                team_label = _opt_str(row.get("nomEquipe")) or "Exempt"
 
             if not club_code and row_engagement_id:
                 club_code = engagement_to_code.get(row_engagement_id)
@@ -1042,6 +1123,7 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             # querying the API (fields=classements.*, same token used
             # elsewhere in this file): it's real data, not derived.
             draws = _safe_int(row.get("nuls"))
+            initial_points = _safe_int(row.get("pointsInitiaux"))
             forfeits = _safe_int(row.get("nombreForfaits"))
             defaults = _safe_int(row.get("nombreDefauts"))
             referee_penalties = _safe_int(row.get("penalitesArbitrage"))
@@ -1057,12 +1139,15 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
 
             standing_entry = {
                 "position": pos,
+                "engagement_id": row_engagement_id or None,
                 "team_name": team_label,
                 "points": pts,
                 "played": played,
                 "won": won,
                 "lost": lost,
                 "draws": draws,
+                "initial_points": initial_points,
+                "irregularities": initial_points,
                 "forfeits": forfeits,
                 "defaults": defaults,
                 "referee_penalties": referee_penalties,
@@ -1108,44 +1193,26 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
         engagement_to_code: dict[str, str] | None = None,
     ) -> MatchDetails:
         """Parse raw match dictionary into a MatchDetails structure."""
-        match_id = str(match.get("id", ""))
-        match_number = str(match.get("numero", ""))
-        round_number = str(match.get("numeroJournee", ""))
-
-        raw_date = match.get("date_rencontre")
-        match_date: datetime | None = None
-        if raw_date:
-            parsed_dt = dt_util.parse_datetime(raw_date)
-            if parsed_dt:
-                match_date = dt_util.as_utc(parsed_dt)
+        match_id = str_or_empty(match.get("id"))
+        match_number = str_or_empty(match.get("numero"))
+        round_number = str_or_empty(match.get("numeroJournee"))
+        match_date = _parse_ffbb_datetime(match.get("date_rencontre"))
 
         score1 = _safe_int(match.get("resultatEquipe1"))
         score2 = _safe_int(match.get("resultatEquipe2"))
         is_played = _is_played(match)
 
-        eq1_engagement = match.get("idEngagementEquipe1")
-        eq2_engagement = match.get("idEngagementEquipe2")
-        eq1_id = (
-            str(eq1_engagement.get("id", ""))
-            if isinstance(eq1_engagement, dict)
-            else str(eq1_engagement or "")
-        )
-        eq2_id = (
-            str(eq2_engagement.get("id", ""))
-            if isinstance(eq2_engagement, dict)
-            else str(eq2_engagement or "")
-        )
+        eq1_id = _engagement_id(match.get("idEngagementEquipe1"))
+        eq2_id = _engagement_id(match.get("idEngagementEquipe2"))
 
-        raw_org_eq1 = match.get("idOrganismeEquipe1")
-        org_eq1: dict[str, Any] = raw_org_eq1 if isinstance(raw_org_eq1, dict) else {}
-        raw_org_eq2 = match.get("idOrganismeEquipe2")
-        org_eq2: dict[str, Any] = raw_org_eq2 if isinstance(raw_org_eq2, dict) else {}
+        org_eq1 = as_dict(match.get("idOrganismeEquipe1"))
+        org_eq2 = as_dict(match.get("idOrganismeEquipe2"))
 
         code_map = engagement_to_code or {}
 
         if is_home:
-            team_name = match.get("nomEquipe1") or self.team_name
-            raw_opponent_name = match.get("nomEquipe2")
+            team_name = _opt_str(match.get("nomEquipe1")) or self.team_name
+            raw_opponent_name = _opt_str(match.get("nomEquipe2"))
             opponent_name = raw_opponent_name or "Adversaire"
             opponent_org = org_eq2
             team_org = org_eq1
@@ -1153,8 +1220,8 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             opponent_score = score2
             opponent_engagement_id = eq2_id
         else:
-            team_name = match.get("nomEquipe2") or self.team_name
-            raw_opponent_name = match.get("nomEquipe1")
+            team_name = _opt_str(match.get("nomEquipe2")) or self.team_name
+            raw_opponent_name = _opt_str(match.get("nomEquipe1"))
             opponent_name = raw_opponent_name or "Adversaire"
             opponent_org = org_eq1
             team_org = org_eq2
@@ -1188,11 +1255,8 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             else:
                 result = "draw"
 
-        raw_salle = match.get("salle")
-        salle: dict[str, Any] = raw_salle if isinstance(raw_salle, dict) else {}
-
-        raw_commune = salle.get("commune")
-        commune: dict[str, Any] = raw_commune if isinstance(raw_commune, dict) else {}
+        salle = as_dict(match.get("salle"))
+        commune = as_dict(salle.get("commune"))
 
         return MatchDetails(
             match_id=match_id,
@@ -1202,21 +1266,20 @@ class FFBBDataUpdateCoordinator(DataUpdateCoordinator[FFBBTeamData]):
             is_home=is_home,
             team_name=team_name,
             opponent_name=opponent_name,
-            opponent_club_id=str(opponent_org.get("id"))
-            if opponent_org.get("id")
-            else None,
+            opponent_club_id=_opt_str(opponent_org.get("id")),
             is_played=is_played,
             team_score=team_score,
             opponent_score=opponent_score,
             result=result,
-            gym_name=salle.get("libelle") or salle.get("nom"),
-            gym_address=salle.get("adresse"),
-            gym_postal_code=commune.get("codePostal"),
-            gym_city=commune.get("libelle"),
+            gym_name=_opt_str(salle.get("libelle") or salle.get("nom")),
+            gym_address=_opt_str(salle.get("adresse")),
+            gym_postal_code=_opt_str(commune.get("codePostal")),
+            gym_city=_opt_str(commune.get("libelle")),
             team_logo_url=team_logo_url,
             opponent_logo_url=opponent_logo_url,
             raw=match,
             team_url=team_url,
             opponent_url=opponent_url,
+            opponent_engagement_id=opponent_engagement_id,
             is_exempt=is_exempt,
         )

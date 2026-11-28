@@ -192,20 +192,16 @@
       "fix_flow": {
         "step": {
           "init": {
-            "title": "“{team_name}”: what do you want to do?",
-            "description": "“{team_name}” can't be found on the FFBB API. Follow it under its new IDs, or ignore this alert.",
+            "title": "\"{team_name}\": what do you want to do?",
+            "description": "\"{team_name}\" cannot be found on the FFBB API. Follow it under its new IDs, or ignore this alert.",
             "menu_options": {
               "follow": "Find the team again",
               "ignore": "Ignore this alert"
             }
           },
-          "confirm": {
-            "title": "Find \"{team_name}\" again",
-            "description": "The team \"{team_name}\" has been unavailable on the FFBB API for several days. This typically happens at the start of a season, when the FFBB assigns new engagement and pool IDs. The next steps search for \"{team_name}\" again so it can be tracked under its new IDs. Its existing entities are kept, with their IDs, names and history, so your automations and dashboards keep working."
-          },
           "search": {
             "title": "Search for \"{team_name}\"",
-            "description": "Enter a club name, city, team URL, or team ID to find \"{team_name}\" for this season.",
+            "description": "Enter a club name, city, team URL, or team ID to find \"{team_name}\" under its new IDs. Its existing entities are kept, with their IDs, names and history, so your automations and dashboards keep working.",
             "data": {
               "search_query": "Club, city, team URL, or team ID"
             }
@@ -249,7 +245,7 @@
       }
     },
     "token_refresh_failing": {
-      "title": "FFBB Tracker: Public token refresh failing",
+      "title": "FFBB Tracker: public token refresh failing for {team_name}",
       "description": "Updates for \"{team_name}\" are still working thanks to a fallback token, but the automatic refresh of the FFBB public API token has failed several times in a row. This may mean the FFBB has changed its `competitions.ffbb.com` API and this integration will need an update. Consider checking for a newer release, or opening an issue on GitHub if this persists."
     },
     "phase_change": {
@@ -257,8 +253,8 @@
       "fix_flow": {
         "step": {
           "init": {
-            "title": "“{team_name}”: what do you want to do?",
-            "description": "“{team_name}” has no match left to play. Follow it to its next phase, or ignore this alert (for example between two seasons).",
+            "title": "\"{team_name}\": what do you want to do?",
+            "description": "\"{team_name}\" has no match left to play. Follow it to its next phase, or ignore this alert (for example between two seasons).",
             "menu_options": {
               "follow": "Follow the team to its next phase",
               "ignore": "Ignore this alert"
@@ -276,13 +272,9 @@
               "team_filter": "Type part of a team, category or competition name (e.g. U13) and select Submit to narrow the list. Submit again to confirm the team chosen."
             }
           },
-          "confirm": {
-            "title": "Find \"{team_name}\" again",
-            "description": "The team \"{team_name}\" has no match left to play. This typically happens when a phase ends, and the team continues under a new pool. The next steps search for \"{team_name}\" again so it can be tracked in its new pool. Its existing entities are kept, with their IDs, names and history, so your automations and dashboards keep working."
-          },
           "search": {
             "title": "Search for \"{team_name}\"",
-            "description": "Enter a club name, city, team URL, or team ID to find \"{team_name}\" for this season.",
+            "description": "Enter a club name, city, team URL, or team ID to find \"{team_name}\" in its new pool. Its existing entities are kept, with their IDs, names and history, so your automations and dashboards keep working.",
             "data": {
               "search_query": "Club, city, team URL, or team ID"
             }

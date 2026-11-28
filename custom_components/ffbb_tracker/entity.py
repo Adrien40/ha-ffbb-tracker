@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
 from urllib.parse import quote
 
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 
 from .const import (
@@ -13,6 +15,14 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import FFBBDataUpdateCoordinator
+
+
+def primary_language(hass: HomeAssistant | None) -> str:
+    """Return the normalized primary BCP-47 language subtag, defaulting to 'en'."""
+    raw: Any = getattr(getattr(hass, "config", None), "language", None)
+    if not isinstance(raw, str) or not raw.strip():
+        return "en"
+    return raw.strip().lower().replace("_", "-").split("-", 1)[0]
 
 
 def team_device_info(coordinator: FFBBDataUpdateCoordinator) -> DeviceInfo:

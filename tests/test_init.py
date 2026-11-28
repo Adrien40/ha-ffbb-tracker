@@ -157,6 +157,38 @@ async def test_removing_an_entry_forgets_its_not_found_clock(hass, hass_storage)
     assert list(hass_storage[key]["data"]) == ["other:poule-9"]
 
 
+async def test_removing_an_entry_deletes_all_its_repair_issues(hass):
+    """Deleting a tracked team must clear every repair alert raised for it."""
+    entry = _make_entry()
+    entry.add_to_hass(hass)
+    for prefix in ("season_rollover", "phase_change", "token_refresh_failing"):
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            f"{prefix}_123456",
+            is_fixable=prefix != "token_refresh_failing",
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=prefix,
+            translation_placeholders={"team_name": "Basket Landes"},
+        )
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        "season_rollover_other",
+        is_fixable=True,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key="season_rollover",
+        translation_placeholders={"team_name": "Other"},
+    )
+
+    await async_remove_entry(hass, entry)
+
+    registry = ir.async_get(hass)
+    for prefix in ("season_rollover", "phase_change", "token_refresh_failing"):
+        assert registry.async_get_issue(DOMAIN, f"{prefix}_123456") is None
+    assert registry.async_get_issue(DOMAIN, "season_rollover_other") is not None
+
+
 async def test_changing_options_reloads_the_entry_once(hass):
     """Saving the options form reloads the entry exactly once."""
     get_poule = AsyncMock(return_value=MINIMAL_POULE_PAYLOAD)

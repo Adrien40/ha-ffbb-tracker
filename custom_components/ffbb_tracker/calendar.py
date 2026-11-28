@@ -13,7 +13,7 @@ from homeassistant.util import dt as dt_util
 from . import FFBBConfigEntry
 from .const import ATTRIBUTION
 from .coordinator import FFBBDataUpdateCoordinator, MatchDetails
-from .entity import team_device_info
+from .entity import primary_language, team_device_info
 
 # The calendar entity only reads coordinator.data; it performs no direct
 # network I/O of its own, so there is nothing to throttle here.
@@ -49,8 +49,7 @@ _LABELS: dict[str, dict[str, str]] = {
 
 def _get_labels(hass: HomeAssistant | None) -> dict[str, str]:
     """Return the label set matching the instance language, defaulting to English."""
-    language: str | None = getattr(getattr(hass, "config", None), "language", None)
-    return _LABELS.get(language, _LABELS["en"]) if language else _LABELS["en"]
+    return _LABELS.get(primary_language(hass), _LABELS["en"])
 
 
 async def async_setup_entry(

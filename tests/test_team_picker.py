@@ -14,6 +14,7 @@ from custom_components.ffbb_tracker.team_picker import (
     TEAM_FILTER_MIN_TEAMS,
     TeamChooser,
     build_entry,
+    club_options,
     competition_score,
     filter_teams,
     search_clubs,
@@ -144,6 +145,9 @@ def test_a_filter_with_no_match_says_so_and_keeps_the_whole_list():
 
     assert chooser.errors == {CONF_TEAM_FILTER: "no_team_matches"}
     assert len(chooser.teams) == len(_many_teams())
+    # Nothing matched, so the first team of the full list must NOT be preselected.
+    with pytest.raises(vol.Invalid):
+        vol.Schema(chooser.schema_fields())({})
 
 
 def test_the_closest_team_is_preselected_only_when_it_is_a_close_match():
@@ -206,7 +210,7 @@ def test_a_null_name_falls_back_instead_of_showing_none():
     team = {
         "nom": None,
         "idCompetition": {"nom": None},
-        "idPoule": {"id": "p1", "nom": None},
+        "idPoule": {"id": None, "nom": None},
     }
 
     assert team_label(team) == "Équipe — Compétition"
@@ -214,9 +218,39 @@ def test_a_null_name_falls_back_instead_of_showing_none():
     assert title == "Équipe - Compétition"
     assert "None" not in data.values()
     assert data["team_name"] == "Équipe"
+    assert data["poule_id"] == ""
+    assert club_options([{"id": "1", "nom": None, "code": None}]) == {"1": "Club (N/A)"}
 
 
 def test_ranking_a_team_with_a_null_competition_name_does_not_count_none():
     team = {"nom": "X", "idCompetition": {"nom": None}, "idPoule": {"id": "p"}}
 
     assert competition_score(team, "None") == 0
+
+
+async def test_flattened_scalar_relations_do_not_raise():
+    """Scalar Directus relation IDs (`idCompetition`, `idPoule`) must not raise."""
+    from custom_components.ffbb_tracker.team_picker import club_teams, lookup_engagement
+
+    flat = {
+        "id": "42",
+        "nom": 123,
+        "idCompetition": "flat-comp-id",
+        "idPoule": "flat-poule-id",
+    }
+    assert team_label(flat) == "123 — Compétition"
+    assert competition_score(flat, "U13") == 0
+    data, title = build_entry(flat, "42", "org-1")
+    assert title == "123 - Compétition"
+    assert data["poule_id"] == "flat-poule-id"
+
+    client = MagicMock()
+    client.get_club_engagements = AsyncMock(return_value=[flat])
+    teams, err = await club_teams(client, "org-1")
+    assert err is None
+    assert teams == [flat]
+
+    client.get_engagement = AsyncMock(return_value=flat)
+    eng, err = await lookup_engagement(client, "42")
+    assert err is None
+    assert eng == flat
